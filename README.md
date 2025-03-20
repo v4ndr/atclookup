@@ -1,36 +1,18 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+**ATC Lookup** est un outil permettant, à partir d’un **code ATC**, d’obtenir des **liens directs** vers les fiches médicaments des bases de données de référence.  
+Actuellement, seule la [Base de Données Publique des Médicaments (BDPM)](https://base-donnees-publique.medicaments.gouv.fr/) est couverte.
 
-## Getting Started
+## Pourquoi ATC Lookup ?
 
-First, run the development server:
+La base de données publique des médicaments (BDPM) ne permet pas d'accéder aux RCP directement via un **code ATC**.  
+De nombreux corpus d’informations médicales font référence aux codes ATC, ce qui complique l’accès aux informations détaillées sur un médicament.  
+**ATC Lookup a été conçu pour pallier cette difficulté** et faciliter **l’interopérabilité** des systèmes d’information en santé.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Technologie et API
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ATC Lookup utilise en partie le [Serveur Multi-Terminologie (SMT)](https://smt.esante.gouv.fr/).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Une **API ouverte** est également disponible : [Documentation API](lien_vers_api).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Open source
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Développé par [Romain Vandepitterie](https://fr.linkedin.com/in/romain-vandepitterie-9b4a08152), **ATC Lookup** est un projet **open source sous licence MIT**.
