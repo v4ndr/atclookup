@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useCallback } from "react";
 import { Search } from "lucide-react";
+import formatQuery from "@/lib/formatQuery";
 
 type SearchBarProps = {
   fullWidth?: boolean;
@@ -13,7 +14,9 @@ type SearchBarProps = {
 const SearchBar = ({ fullWidth, className }: SearchBarProps) => {
   const [query, setQuery] = useState("");
   const onSearch = useCallback(() => {
-    window.location.replace(`/results?atc=${query}`);
+    const normalizedQuery = formatQuery(query);
+    if (!normalizedQuery) return;
+    window.location.replace(`/results?atc=${normalizedQuery}`);
   }, [query]);
 
   return (
