@@ -6,9 +6,7 @@ type AboutProps = {
 
 const About = ({ className }: AboutProps) => {
   return (
-    <div
-      className={`w-full flex items-center justify-center h-min ${className}`}
-    >
+    <div className={`w-full flex items-center justify-center ${className}`}>
       <p
         className="text-sm text-gray-500 text-center cursor-pointer hover:underline"
         onClick={() => window.location.replace("/about")}

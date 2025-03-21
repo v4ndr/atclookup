@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
-    <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+    <div className="max-w-3xl">
       <div className="flex items-center mb-6">
         <Button
           variant="outline"

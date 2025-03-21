@@ -2,7 +2,6 @@ import SearchBar from "@/components/SearchBar";
 import Results from "@/components/Results";
 import HomeButton from "@/components/HomeButton";
 import lookupAtc from "@/lib/lookupAtc";
-import About from "@/components/About";
 
 type HomeProps = {
   searchParams: Promise<{ atc: string }>;
@@ -28,7 +27,6 @@ export default async function Home({ searchParams }: HomeProps) {
       ) : (
         <Results data={results} />
       )}
-      <About className="" />
     </>
   );
 }
