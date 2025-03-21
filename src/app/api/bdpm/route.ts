@@ -3,7 +3,7 @@ import loopupAtc from "@/lib/lookupAtc";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const atc = searchParams.get("code");
+  const atc = searchParams.get("atc");
   if (!atc) {
     return new Response("No ATC code provided", { status: 400 });
   }
