@@ -63,7 +63,7 @@ export default function Home() {
       <p className="text-lg mb-4">
         Une <strong>API ouverte</strong> est également disponible :{" "}
         <a
-          href="lien_vers_api"
+          href="https://documenter.getpostman.com/view/18250379/2sAYkGLzAU"
           target="_blank"
           className="text-blue-500 hover:underline"
         >
