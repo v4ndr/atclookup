@@ -38,10 +38,9 @@ export default function Home() {
       </h2>
       <p className="text-lg mb-4">
         La base de données publique des médicaments (BDPM) ne permet pas
-        d&apos;accéder aux RCP directement via un code ATC{" "}
-        <strong>codes ATC</strong>. De nombreux corpus d’informations médicales
-        font référence aux codes ATC, ce qui complique l’accès aux informations
-        détaillées sur un médicament.{" "}
+        d&apos;accéder aux RCP directement via un <strong>codes ATC</strong>. De
+        nombreux corpus d’informations médicales font référence aux codes ATC,
+        ce qui complique l’accès aux informations détaillées sur un médicament.{" "}
         <strong>ATC Lookup a été conçu pour pallier cette difficulté</strong> et
         faciliter <strong>l’interopérabilité</strong> des systèmes d’information
         en santé.
