@@ -4,11 +4,11 @@ import RcpViewer from "@/components/RcpViewer";
 import { scrapeRcp } from "@/lib/scrapeRcp";
 
 type RcpPageProps = {
-  searchParams: Promise<{ url?: string }>;
+  searchParams: Promise<{ url?: string; siblings?: string }>;
 };
 
 export default async function RcpPage({ searchParams }: RcpPageProps) {
-  const { url } = await searchParams;
+  const { url, siblings: siblingsParam } = await searchParams;
 
   if (!url) {
     return (
@@ -24,9 +24,9 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
     );
   }
 
-  let sections;
+  let result;
   try {
-    sections = await scrapeRcp(url);
+    result = await scrapeRcp(url);
   } catch {
     return (
       <>
@@ -44,13 +44,22 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
     );
   }
 
+  const siblings: { label: string; url: string }[] = siblingsParam
+    ? JSON.parse(siblingsParam)
+    : [];
+
   return (
     <>
       <div className="flex items-center justify-center space-x-3 w-full">
         <HomeButton />
         <SearchBar fullWidth className="" />
       </div>
-      <RcpViewer sections={sections} />
+      <RcpViewer
+        name={result.name}
+        sections={result.sections}
+        sourceUrl={url}
+        siblings={siblings}
+      />
     </>
   );
 }

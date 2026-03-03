@@ -8,6 +8,11 @@ export type RcpSection = {
   children: RcpSection[];
 };
 
+export type RcpResult = {
+  name: string;
+  sections: RcpSection[];
+};
+
 /** Fetch URL following redirects, ignoring SSL cert errors (BDPM has incomplete cert chain) */
 function fetchBdpm(url: string): Promise<string> {
   const mod = url.startsWith("https") ? https : http;
@@ -28,7 +33,7 @@ function fetchBdpm(url: string): Promise<string> {
   });
 }
 
-export async function scrapeRcp(url: string): Promise<RcpSection[]> {
+export async function scrapeRcp(url: string): Promise<RcpResult> {
   const html = await fetchBdpm(url);
   const $ = cheerio.load(html);
 
@@ -77,5 +82,11 @@ export async function scrapeRcp(url: string): Promise<RcpSection[]> {
     }
   });
 
-  return sections;
+  // Extract medication name from DENOMINATION section content
+  const denomSection = sections.find((s) => s.title.includes("DENOMINATION"));
+  const name = denomSection?.content
+    ? cheerio.load(denomSection.content).text().trim()
+    : "";
+
+  return { name, sections };
 }

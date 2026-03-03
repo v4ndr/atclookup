@@ -215,7 +215,7 @@ const Results = ({ data }: ResultsProps) => {
                       return (
                         <a
                           key={`${card.voie}|${card.dosage}`}
-                          href={`/rcp?url=${encodeURIComponent(picked.url)}`}
+                          href={`/rcp?url=${encodeURIComponent(picked.url)}&siblings=${encodeURIComponent(JSON.stringify(card.specialites))}`}
                           className="block"
                         >
                           {cardContent}

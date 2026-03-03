@@ -2,6 +2,24 @@
 
 import { RcpSection } from "@/lib/scrapeRcp";
 
+/** "4. DONNEES CLINIQUES" → "4. Donnees cliniques" */
+const capitalizeTitle = (s: string): string => {
+  // Keep the numbering prefix as-is, lowercase+capitalize the rest
+  const match = s.match(/^(\d+\.\s*)(.*)/);
+  if (match) {
+    const rest = match[2];
+    return match[1] + rest.charAt(0).toUpperCase() + rest.slice(1).toLowerCase();
+  }
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+
+type RcpViewerProps = {
+  name: string;
+  sections: RcpSection[];
+  sourceUrl: string;
+  siblings: { label: string; url: string }[];
+};
+
 const ChevronIcon = () => (
   <svg
     className="size-4 shrink-0 transition-transform [[open]>&]:rotate-90"
@@ -27,14 +45,23 @@ const SectionContent = ({ html }: { html: string }) => {
   );
 };
 
-const RcpViewer = ({ sections }: { sections: RcpSection[] }) => {
+const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
+  const sorted = [...siblings].sort((a, b) => a.label.localeCompare(b.label));
+
   return (
     <div className="w-full space-y-1">
+      <style>{`
+        .rcp-content .AmmAnnexeTitre3 {
+          font-style: italic;
+          text-decoration: underline;
+          margin-top: 0.75rem;
+        }
+      `}</style>
       {sections.map((section, i) => (
         <details key={i}>
           <summary className="cursor-pointer list-none flex items-center gap-2 py-2 font-semibold text-base [&::-webkit-details-marker]:hidden">
             <ChevronIcon />
-            {section.title}
+            {capitalizeTitle(section.title)}
           </summary>
           <div className="pl-6">
             <SectionContent html={section.content} />
@@ -56,6 +83,45 @@ const RcpViewer = ({ sections }: { sections: RcpSection[] }) => {
           </div>
         </details>
       ))}
+
+      <div className="mt-8 border-t pt-4 text-xs text-muted-foreground space-y-2">
+        <p>
+          Ce contenu est issu de la RCP de{" "}
+          <a className="underline hover:text-foreground" href={sourceUrl}>
+            {name || "cette specialite"}
+          </a>
+          , choisie de manière aléatoire parmi les {siblings.length} RCP
+          identiques disponibles pour cette combinaison.{" "}
+          <span className="italic">
+            Source : Base de donnees publique des medicaments (BDPM)
+          </span>
+        </p>
+
+        {sorted.length > 1 && (
+          <details>
+            <summary className="cursor-pointer list-none flex items-center gap-1 [&::-webkit-details-marker]:hidden">
+              <ChevronIcon />
+              <span className="underline">
+                Voir toutes les RCP de cette combinaison ({sorted.length})
+              </span>
+            </summary>
+            <ul className="pl-6 pt-1 space-y-1">
+              {sorted.map((s) => (
+                <li key={s.url}>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    {s.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
     </div>
   );
 };
