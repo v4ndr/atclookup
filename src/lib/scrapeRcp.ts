@@ -1,0 +1,81 @@
+import * as cheerio from "cheerio";
+import https from "node:https";
+import http from "node:http";
+
+export type RcpSection = {
+  title: string;
+  content: string;
+  children: RcpSection[];
+};
+
+/** Fetch URL following redirects, ignoring SSL cert errors (BDPM has incomplete cert chain) */
+function fetchBdpm(url: string): Promise<string> {
+  const mod = url.startsWith("https") ? https : http;
+  const opts = url.startsWith("https") ? { rejectUnauthorized: false } : {};
+  return new Promise((resolve, reject) => {
+    mod.get(url, opts, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return fetchBdpm(res.headers.location).then(resolve, reject);
+      }
+      if (res.statusCode && res.statusCode >= 400) {
+        return reject(new Error(`Failed to fetch RCP: ${res.statusCode}`));
+      }
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+export async function scrapeRcp(url: string): Promise<RcpSection[]> {
+  const html = await fetchBdpm(url);
+  const $ = cheerio.load(html);
+
+  // Find the container holding AmmAnnexeTitre1 elements
+  // Structure: #tabpanel-rcp-panel > .fr-container > .fr-grid-row > div.fr-col-12
+  // or directly #tabpanel-rcp-panel with children (older layout)
+  const firstTitre = $(".AmmAnnexeTitre1").first();
+  if (firstTitre.length === 0) {
+    throw new Error("RCP content not found on page");
+  }
+  const container = firstTitre.parent();
+
+  const sections: RcpSection[] = [];
+  let currentSection: RcpSection | null = null;
+  let currentChild: RcpSection | null = null;
+
+  container.children().each((_, el) => {
+    const $el = $(el);
+    const className = $el.attr("class") || "";
+
+    if (className.includes("AmmAnnexeTitre1")) {
+      currentChild = null;
+      currentSection = {
+        title: $el.text().trim(),
+        content: "",
+        children: [],
+      };
+      sections.push(currentSection);
+    } else if (className.includes("AmmAnnexeTitre2")) {
+      currentChild = {
+        title: $el.text().trim(),
+        content: "",
+        children: [],
+      };
+      if (currentSection) {
+        currentSection.children.push(currentChild);
+      }
+    } else if (className.startsWith("Amm")) {
+      // Only accumulate Amm* content classes, skip tooltips/nav elements
+      const htmlContent = $.html($el);
+      if (currentChild) {
+        currentChild.content += htmlContent;
+      } else if (currentSection) {
+        currentSection.content += htmlContent;
+      }
+    }
+  });
+
+  return sections;
+}

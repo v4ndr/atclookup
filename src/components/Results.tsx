@@ -1,11 +1,6 @@
 import { SpecialiteGroup } from "@/types/global";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import FormeBadges from "@/components/FormeBadges";
 
 type ResultsProps = {
@@ -137,10 +132,10 @@ const Results = ({ data }: ResultsProps) => {
 
         return (
           <div key={molecule} className="mb-8">
-            <h2 className="text-xl font-bold mb-4 capitalize">{molecule}</h2>
+            <h2 className="text-xl font-bold mb-4">{capitalize(molecule)}</h2>
 
             <div className="space-y-2">
-              {sortedVoies.map((voie, idx) => (
+              {sortedVoies.map((voie) => (
                 <details key={voie} open>
                   <summary className="cursor-pointer list-none flex items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
                     <svg
@@ -186,22 +181,25 @@ const Results = ({ data }: ResultsProps) => {
                               >
                                 {capitalize(card.voie)}
                               </Badge>
-                              <Badge
-                                variant="outline"
-                                className="w-fit"
-                              >
+                              <Badge variant="outline" className="w-fit">
                                 {card.dosage}
                               </Badge>
                             </div>
-                            <CardTitle className="text-lg">
-                              <span className="capitalize">
-                                {molecule}
-                              </span>{" "}
-                              {card.dosage}
+                            <CardTitle className="text-lg truncate">
+                              {capitalize(molecule)} {card.dosage}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
                             <FormeBadges formes={formes} />
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Il existe{" "}
+                              <span className="font-semibold">
+                                {card.specialites.length} RCP
+                              </span>{" "}
+                              identique{card.specialites.length > 1 ? "s" : ""}{" "}
+                              pour cette combinaison. Cliquez pour accéder à une
+                              RCP aléatoire parmi ces dernières.
+                            </p>
                           </CardContent>
                         </Card>
                       );
@@ -217,9 +215,7 @@ const Results = ({ data }: ResultsProps) => {
                       return (
                         <a
                           key={`${card.voie}|${card.dosage}`}
-                          href={picked.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={`/rcp?url=${encodeURIComponent(picked.url)}`}
                           className="block"
                         >
                           {cardContent}

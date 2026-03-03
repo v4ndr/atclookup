@@ -1,7 +1,8 @@
-import { Binding, SpecialiteGroup, Specialite } from "@/types/global";
+import { Binding, SpecialiteGroup } from "@/types/global";
 
 const cleanDosageValue = (dosage: string): string => {
   return dosage
+    .replace(/\s*\/\s*/g, "/") // normalise espaces autour des /
     .replace(/(\d+)[.,]0+(\s)/g, "$1$2")
     .replace(/^(\d+)[.,]0+$/, "$1")
     .replace(/\b1000\s*mg\b/gi, "1 g");
@@ -24,11 +25,19 @@ const normalizeDosage = (quantite: string, reference?: string): string => {
 };
 
 const extractDosageFromLabel = (label: string): string | null => {
-  const match = label.match(
-    /(\d+[\d,./]*\s*(?:mg|g|ml|µg|UI|MUI|%|mg\/ml|mg\/mL)(?:\s*\/\s*\d+\s*m[lL])?)/i,
+  // Pattern composé : "500 microgrammes/50 microgrammes/dose" ou "100 mg/12,5 mg par mL"
+  const compoundMatch = label.match(
+    /(\d+[\d,./]*\s*(?:mg|g|ml|µg|microgrammes?|UI|MUI|%)\s*\/\s*\d+[\d,./]*\s*(?:mg|g|ml|µg|microgrammes?|UI|MUI|%)(?:\s*\/\s*(?:dose|ml|mL))?)/i,
   );
-  if (!match) return null;
-  return cleanDosageValue(match[1].trim());
+  if (compoundMatch) return cleanDosageValue(compoundMatch[1].trim());
+
+  // Pattern simple : "400 mg" ou "20 mg/1 ml"
+  const simpleMatch = label.match(
+    /(\d+[\d,./]*\s*(?:mg|g|ml|µg|microgrammes?|UI|MUI|%|mg\/ml|mg\/mL)(?:\s*\/\s*\d+\s*m[lL])?)/i,
+  );
+  if (simpleMatch) return cleanDosageValue(simpleMatch[1].trim());
+
+  return null;
 };
 
 type RawSpecialite = {
