@@ -2,6 +2,7 @@ import { SpecialiteGroup } from "@/types/global";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import FormeBadges from "@/components/FormeBadges";
+import RandomRcpLink from "@/components/RandomRcpLink";
 
 type ResultsProps = {
   data: SpecialiteGroup[] | Error;
@@ -45,9 +46,6 @@ const dosageToMg = (dosage: string): number => {
   const unit = match[2].toLowerCase();
   return value * (unitToMg[unit] ?? 1);
 };
-
-const pickRandom = <T,>(arr: T[]): T =>
-  arr[Math.floor(Math.random() * arr.length)];
 
 type FlatCard = {
   voie: string;
@@ -161,7 +159,6 @@ const Results = ({ data }: ResultsProps) => {
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 pl-6 pt-2 pb-4">
                     {byVoie.get(voie)!.map((card) => {
                       const isNA = card.dosage === "N/A";
-                      const picked = pickRandom(card.specialites);
                       const formes = Array.from(card.formes)
                         .map((f) => capitalize(f))
                         .sort();
@@ -213,13 +210,12 @@ const Results = ({ data }: ResultsProps) => {
                       }
 
                       return (
-                        <a
+                        <RandomRcpLink
                           key={`${card.voie}|${card.dosage}`}
-                          href={`/rcp?url=${encodeURIComponent(picked.url)}&siblings=${encodeURIComponent(JSON.stringify(card.specialites))}`}
-                          className="block"
+                          specialites={card.specialites}
                         >
                           {cardContent}
-                        </a>
+                        </RandomRcpLink>
                       );
                     })}
                   </div>
