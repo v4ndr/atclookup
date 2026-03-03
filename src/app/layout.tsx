@@ -28,8 +28,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen box-border flex justify-center `}
       >
-        <div className="grid grid-rows-[1fr_80px]">
-          <div className="row-start-1 font-[family-name:var(--font-geist-sans)] w-full h-full flex flex-1 flex-col gap-8 max-w-[1200px] items-center justify-start py-8 sm:pt-16 px-8 sm:px-12 lg:px-32">
+        <div className="grid grid-rows-[1fr_80px] w-full max-w-[1000px]">
+          <div className="row-start-1 font-[family-name:var(--font-geist-sans)] w-full h-full flex flex-1 flex-col gap-8 max-w-[1000px] items-center justify-start py-8 sm:pt-16 px-8 sm:px-12">
             {children}
           </div>
           <About className="row-start-2" />

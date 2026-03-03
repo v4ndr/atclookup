@@ -8,5 +8,6 @@ export async function GET(request: NextRequest) {
     return new Response("No ATC code provided", { status: 400 });
   }
   const result = await loopupAtc(atc);
+
   return new Response(JSON.stringify(result));
 }

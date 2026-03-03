@@ -27,7 +27,7 @@ const SearchBar = ({ fullWidth, className }: SearchBarProps) => {
     >
       <Input
         type="text"
-        placeholder="Code ATC (ex: J01MA12)"
+        placeholder="Code ATC (ex: J01MA12, N02BE01, etc.)"
         onChange={(e) => setQuery(e.target.value)}
         value={query}
         onKeyDown={(e) => e.key === "Enter" && onSearch()}
