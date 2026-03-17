@@ -194,8 +194,8 @@ const Results = ({ data }: ResultsProps) => {
                                 {card.specialites.length} RCP
                               </span>{" "}
                               identique{card.specialites.length > 1 ? "s" : ""}{" "}
-                              pour cette combinaison. Cliquez pour accéder à une
-                              RCP aléatoire parmi ces dernières.
+                              pour cette combinaison. Cliquez pour accéder à un
+                              RCP aléatoire parmi ces derniers.
                             </p>
                           </CardContent>
                         </Card>

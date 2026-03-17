@@ -2,17 +2,6 @@
 
 import { RcpSection } from "@/lib/scrapeRcp";
 
-/** "4. DONNEES CLINIQUES" → "4. Donnees cliniques" */
-const capitalizeTitle = (s: string): string => {
-  // Keep the numbering prefix as-is, lowercase+capitalize the rest
-  const match = s.match(/^(\d+\.\s*)(.*)/);
-  if (match) {
-    const rest = match[2];
-    return match[1] + rest.charAt(0).toUpperCase() + rest.slice(1).toLowerCase();
-  }
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-};
-
 type RcpViewerProps = {
   name: string;
   sections: RcpSection[];
@@ -57,36 +46,9 @@ const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
           margin-top: 0.75rem;
         }
       `}</style>
-      {sections.map((section, i) => (
-        <details key={i}>
-          <summary className="cursor-pointer list-none flex items-center gap-2 py-2 font-semibold text-base [&::-webkit-details-marker]:hidden">
-            <ChevronIcon />
-            {capitalizeTitle(section.title)}
-          </summary>
-          <div className="pl-6">
-            <SectionContent html={section.content} />
-            {section.children.length > 0 && (
-              <div className="space-y-1">
-                {section.children.map((child, j) => (
-                  <details key={j}>
-                    <summary className="cursor-pointer list-none flex items-center gap-2 py-1.5 font-medium text-sm [&::-webkit-details-marker]:hidden">
-                      <ChevronIcon />
-                      {child.title}
-                    </summary>
-                    <div className="pl-6">
-                      <SectionContent html={child.content} />
-                    </div>
-                  </details>
-                ))}
-              </div>
-            )}
-          </div>
-        </details>
-      ))}
-
-      <div className="mt-8 border-t pt-4 text-xs text-muted-foreground space-y-2">
+      <div className="mb-6 border-b pb-4 text-xs text-muted-foreground space-y-2">
         <p>
-          Ce contenu est issu de la RCP de{" "}
+          Ce contenu est issu du RCP de{" "}
           <a className="underline hover:text-foreground" href={sourceUrl}>
             {name || "cette specialite"}
           </a>
@@ -102,7 +64,7 @@ const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
             <summary className="cursor-pointer list-none flex items-center gap-1 [&::-webkit-details-marker]:hidden">
               <ChevronIcon />
               <span className="underline">
-                Voir toutes les RCP de cette combinaison ({sorted.length})
+                Voir tous les RCP de cette combinaison ({sorted.length})
               </span>
             </summary>
             <ul className="pl-6 pt-1 space-y-1">
@@ -122,6 +84,35 @@ const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
           </details>
         )}
       </div>
+      {sections.map((section, i) => {
+        const isClinique = section.title.includes("CLINIQUES");
+        return (
+          <details key={i} open={isClinique || undefined}>
+            <summary className="cursor-pointer list-none flex items-center gap-2 py-2 font-semibold text-base [&::-webkit-details-marker]:hidden">
+              <ChevronIcon />
+              {section.title}
+            </summary>
+            <div className="pl-6">
+              <SectionContent html={section.content} />
+              {section.children.length > 0 && (
+                <div className="space-y-1">
+                  {section.children.map((child, j) => (
+                    <details key={j}>
+                      <summary className="cursor-pointer list-none flex items-center gap-2 py-1.5 font-medium text-sm [&::-webkit-details-marker]:hidden">
+                        <ChevronIcon />
+                        {child.title}
+                      </summary>
+                      <div className="pl-6">
+                        <SectionContent html={child.content} />
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 };
