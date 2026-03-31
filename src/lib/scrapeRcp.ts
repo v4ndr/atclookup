@@ -13,14 +13,16 @@ export type RcpResult = {
   sections: RcpSection[];
 };
 
-/** Fetch URL following redirects, ignoring SSL cert errors (BDPM has incomplete cert chain) */
-function fetchBdpm(url: string): Promise<string> {
+/** Fetch a single URL, following redirects, ignoring SSL cert errors (BDPM has incomplete cert chain) */
+function fetchOnce(url: string): Promise<string> {
   const mod = url.startsWith("https") ? https : http;
-  const opts = url.startsWith("https") ? { rejectUnauthorized: false } : {};
+  const opts = url.startsWith("https")
+    ? { rejectUnauthorized: false, timeout: 15_000 }
+    : { timeout: 15_000 };
   return new Promise((resolve, reject) => {
-    mod.get(url, opts, (res) => {
+    const req = mod.get(url, opts, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchBdpm(res.headers.location).then(resolve, reject);
+        return fetchOnce(res.headers.location).then(resolve, reject);
       }
       if (res.statusCode && res.statusCode >= 400) {
         return reject(new Error(`Failed to fetch RCP: ${res.statusCode}`));
@@ -29,8 +31,34 @@ function fetchBdpm(url: string): Promise<string> {
       res.on("data", (chunk) => chunks.push(chunk));
       res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
       res.on("error", reject);
-    }).on("error", reject);
+    });
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timed out"));
+    });
   });
+}
+
+const MAX_RETRIES = 3;
+
+/** Fetch URL with retries and exponential backoff for transient BDPM failures */
+async function fetchBdpm(url: string): Promise<string> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fetchOnce(url);
+    } catch (err) {
+      lastError = err as Error;
+      const msg = lastError.message;
+      // Don't retry on 4xx (client errors) — only on 5xx, timeouts, and network errors
+      if (msg.includes("Failed to fetch RCP: 4")) throw lastError;
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      }
+    }
+  }
+  throw lastError;
 }
 
 export async function scrapeRcp(url: string): Promise<RcpResult> {
