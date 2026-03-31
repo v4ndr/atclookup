@@ -1,6 +1,7 @@
 "use client";
 
 import { RcpSection } from "@/lib/scrapeRcp";
+import { ExternalLink } from "lucide-react";
 
 type RcpViewerProps = {
   name: string;
@@ -37,6 +38,8 @@ const SectionContent = ({ html }: { html: string }) => {
 const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
   const sorted = [...siblings].sort((a, b) => a.label.localeCompare(b.label));
 
+  // info url sourceUrl with 'tab-fiche-info' instead of 'tab-rcp' if it exists, otherwise null
+  const infoUrl = sourceUrl.replace("typedoc=R", "typedoc=F");
   return (
     <div className="w-full space-y-1">
       <style>{`
@@ -46,24 +49,25 @@ const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
           margin-top: 0.75rem;
         }
       `}</style>
-      <div className="mb-6 border-b pb-4 text-xs text-muted-foreground space-y-2">
+      <div className="mb-6 border-b pb-4 text-sm text-zinc-600 space-y-2">
         <p>
-          Ce contenu est issu du RCP de{" "}
+          RCP de{" "}
           <a className="underline hover:text-foreground" href={sourceUrl}>
             {name || "cette specialite"}
           </a>
-          , choisie de manière aléatoire parmi les {siblings.length} RCP
-          identiques disponibles pour cette combinaison.{" "}
-          <span className="italic">
-            Source : Base de donnees publique des medicaments (BDPM)
-          </span>
+          , choisi de manière aléatoire parmi les {siblings.length} RCP
+          disponibles pour cette combinaison.{" "}
         </p>
-
+        <p className="cursor-pointer flex flex-row wrap items-center gap-1 underline hover:text-foreground">
+          <a href={infoUrl} target="_blank" rel="noopener noreferrer">
+            Voir la fiche info de {name || "cette specialite"}
+          </a>
+        </p>
         {sorted.length > 1 && (
           <details>
             <summary className="cursor-pointer list-none flex items-center gap-1 [&::-webkit-details-marker]:hidden">
               <ChevronIcon />
-              <span className="underline">
+              <span className="">
                 Voir tous les RCP de cette combinaison ({sorted.length})
               </span>
             </summary>
