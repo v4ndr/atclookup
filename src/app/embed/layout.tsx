@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="grid grid-rows-[1fr_80px] w-full">
-      <div className="row-start-1 font-[family-name:var(--font-geist-sans)] w-full h-full flex flex-1 flex-col gap-8 items-center justify-start">
+    <div className="h-full w-full">
+      <div className="font-[family-name:var(--font-geist-sans)] w-full h-full flex flex-1 flex-col gap-2 items-center justify-start">
         {children}
       </div>
     </div>

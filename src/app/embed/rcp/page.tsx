@@ -1,4 +1,6 @@
+import BackButton from "@/components/BackButton";
 import RcpViewer from "@/components/RcpViewer";
+import RetryButton from "@/components/RetryButton";
 import { scrapeRcp } from "@/lib/scrapeRcp";
 
 type RcpPageProps = {
@@ -28,7 +30,8 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
           <p className="mb-4">
             Impossible de charger le RCP depuis la base de données publique.
           </p>
-          <p>Veuillez réessayer plus tard.</p>
+          <p className="mb-6">Veuillez réessayer plus tard.</p>
+          <RetryButton />
         </div>
       </>
     );
@@ -40,6 +43,10 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
 
   return (
     <>
+      <div className="w-full">
+        <BackButton />
+      </div>
+
       <RcpViewer
         name={result.name}
         sections={result.sections}

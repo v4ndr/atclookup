@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { RcpSection } from "@/lib/scrapeRcp";
 
 type RcpViewerProps = {
@@ -25,11 +26,19 @@ const ChevronIcon = () => (
 );
 
 const SectionContent = ({ html }: { html: string }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.innerHTML = html;
+    }
+  }, [html]);
+
   if (!html.trim()) return null;
   return (
     <div
+      ref={ref}
       className="rcp-content prose prose-sm max-w-none py-2 text-sm leading-relaxed"
-      dangerouslySetInnerHTML={{ __html: html }}
     />
   );
 };
