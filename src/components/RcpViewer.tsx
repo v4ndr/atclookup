@@ -1,7 +1,6 @@
 "use client";
 
 import { RcpSection } from "@/lib/scrapeRcp";
-import { ExternalLink } from "lucide-react";
 
 type RcpViewerProps = {
   name: string;
