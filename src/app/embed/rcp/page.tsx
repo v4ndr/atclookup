@@ -44,7 +44,7 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
                 <a href={infoUrl} target="_blank" rel="noopener noreferrer">
                   <Button className="cursor-pointer" variant="outline">
                     <ExternalLink />
-                    Voir la fiche info
+                    Voir la fiche info sur la BDPM
                   </Button>
                 </a>
               </div>
