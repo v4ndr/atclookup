@@ -6,6 +6,7 @@ import { RotateCw } from "lucide-react";
 const RetryButton = () => {
   return (
     <Button
+      className="cursor-pointer"
       variant="outline"
       onClick={() => window.location.reload()}
     >

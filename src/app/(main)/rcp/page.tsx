@@ -2,8 +2,10 @@ import SearchBar from "@/components/SearchBar";
 import HomeButton from "@/components/HomeButton";
 import RcpViewer from "@/components/RcpViewer";
 import RetryButton from "@/components/RetryButton";
-import { scrapeRcp } from "@/lib/scrapeRcp";
+import { scrapeRcp, bdpmPageExists } from "@/lib/scrapeRcp";
 import { findSiblings } from "@/lib/findSiblings";
+import { Button } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
 
 type RcpPageProps = {
   searchParams: Promise<{ url?: string; atc?: string }>;
@@ -30,18 +32,40 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
   try {
     result = await scrapeRcp(url);
   } catch {
+    const infoUrl = url.replace("typedoc=R", "typedoc=F");
+    const hasInfoPage = await bdpmPageExists(infoUrl);
+
     return (
       <>
         <div className="flex items-center justify-center space-x-3 w-full">
           <HomeButton />
           <SearchBar fullWidth className="" />
         </div>
-        <div className="text-center text-md mt-10">
-          <p className="mb-4">
-            Impossible de charger le RCP depuis la base de données publique.
-          </p>
-          <p className="mb-6">Veuillez réessayer plus tard.</p>
-          <RetryButton />
+        <div className="text-center text-md mt-10 space-y-4">
+          {hasInfoPage ? (
+            <>
+              <p>
+                Le RCP de ce médicament est disponible sur le site de
+                l&apos;agence européenne des médicaments (EMA).
+              </p>
+              <div className="flex justify-center gap-3">
+                <a href={infoUrl} target="_blank" rel="noopener noreferrer">
+                  <Button className="cursor-pointer" variant="outline">
+                    <ExternalLink />
+                    Voir la fiche info
+                  </Button>
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                Impossible de charger le RCP depuis la base de données publique.
+              </p>
+              <p>Veuillez réessayer plus tard.</p>
+              <RetryButton />
+            </>
+          )}
         </div>
       </>
     );

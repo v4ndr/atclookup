@@ -61,6 +61,16 @@ async function fetchBdpm(url: string): Promise<string> {
   throw lastError;
 }
 
+/** Check if a BDPM page loads successfully (has any content) */
+export async function bdpmPageExists(url: string): Promise<boolean> {
+  try {
+    const html = await fetchBdpm(url);
+    return html.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function scrapeRcp(url: string): Promise<RcpResult> {
   const html = await fetchBdpm(url);
   const $ = cheerio.load(html);
