@@ -5,6 +5,8 @@ import FormeBadges from "@/components/FormeBadges";
 import RandomRcpLink from "@/components/RandomRcpLink";
 
 type ResultsProps = {
+  atc: string;
+  isEmbed?: boolean;
   data: SpecialiteGroup[] | Error;
 };
 
@@ -55,7 +57,7 @@ type FlatCard = {
   specialites: { label: string; url: string }[];
 };
 
-const Results = ({ data }: ResultsProps) => {
+const Results = ({ atc, isEmbed, data }: ResultsProps) => {
   if (data instanceof Error) {
     return (
       <div className="text-center text-md mt-10">
@@ -212,6 +214,8 @@ const Results = ({ data }: ResultsProps) => {
                       return (
                         <RandomRcpLink
                           key={`${card.voie}|${card.dosage}`}
+                          atc={atc}
+                          isEmbed={isEmbed}
                           specialites={card.specialites}
                         >
                           {cardContent}

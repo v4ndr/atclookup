@@ -27,7 +27,7 @@ export default async function Home({ searchParams }: HomeProps) {
           <p>Vérifiez le code ATC et réessayez.</p>
         </div>
       ) : (
-        <Results data={results} />
+        <Results atc={atc} isEmbed data={results} />
       )}
     </>
   );

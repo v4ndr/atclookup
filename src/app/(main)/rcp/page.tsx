@@ -3,13 +3,14 @@ import HomeButton from "@/components/HomeButton";
 import RcpViewer from "@/components/RcpViewer";
 import RetryButton from "@/components/RetryButton";
 import { scrapeRcp } from "@/lib/scrapeRcp";
+import { findSiblings } from "@/lib/findSiblings";
 
 type RcpPageProps = {
-  searchParams: Promise<{ url?: string; siblings?: string }>;
+  searchParams: Promise<{ url?: string; atc?: string }>;
 };
 
 export default async function RcpPage({ searchParams }: RcpPageProps) {
-  const { url, siblings: siblingsParam } = await searchParams;
+  const { url, atc } = await searchParams;
 
   if (!url) {
     return (
@@ -46,9 +47,7 @@ export default async function RcpPage({ searchParams }: RcpPageProps) {
     );
   }
 
-  const siblings: { label: string; url: string }[] = siblingsParam
-    ? JSON.parse(siblingsParam)
-    : [];
+  const siblings = atc ? await findSiblings(atc, url) : [];
 
   return (
     <>
