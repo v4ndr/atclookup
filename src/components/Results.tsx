@@ -61,6 +61,7 @@ const dosageToMg = (dosage: string): number => {
 
 type FlatCard = {
   voie: string;
+  voies: Set<string>;
   formes: Set<string>;
   dosage: string;
   molecule: string;
@@ -95,14 +96,19 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
     if (!byMolecule.has(mol)) byMolecule.set(mol, new Map());
     const cards = byMolecule.get(mol)!;
 
-    // N/A groups stay separate (each specialite keeps its own card).
+    const isOtherVoie = getVoieGroupKey(group.voie) === OTHER_VOIE_KEY;
+    // "Autres" voies of the same specialite group merge into one card.
+    // Main voies stay separate. N/A dosage stays per-specialite.
+    const voieKey = isOtherVoie ? OTHER_VOIE_KEY : group.voie;
     const key =
       group.dosage === "N/A"
-        ? `${group.voie}|N/A|${group.specialites[0]?.url ?? Math.random()}`
-        : `${group.voie}|${group.dosage}`;
+        ? `${voieKey}|N/A|${group.specialites[0]?.url ?? Math.random()}`
+        : `${voieKey}|${group.dosage}`;
+
     if (!cards.has(key)) {
       cards.set(key, {
-        voie: group.voie,
+        voie: voieKey,
+        voies: new Set(),
         formes: new Set(),
         dosage: group.dosage,
         molecule: mol,
@@ -110,8 +116,16 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
       });
     }
     const card = cards.get(key)!;
+    card.voies.add(group.voie);
     card.formes.add(group.forme);
-    card.specialites.push(...group.specialites);
+    // Dedup specialites by URL (a spe with N voies appears N times in `data`).
+    const seen = new Set(card.specialites.map((s) => s.url));
+    for (const spec of group.specialites) {
+      if (!seen.has(spec.url)) {
+        card.specialites.push(spec);
+        seen.add(spec.url);
+      }
+    }
   }
 
   // Trier les molécules : celles avec au moins une voie "principale" d'abord,
@@ -192,9 +206,13 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 pl-6 pt-2 pb-4">
                     {byVoie.get(voie)!.map((card) => {
                       const isNA = card.dosage === "N/A";
+                      const isOther = card.voie === OTHER_VOIE_KEY;
                       const displayDosage = isNA ? "Dosage non spécifié" : card.dosage;
                       const formes = Array.from(card.formes)
                         .map((f) => capitalize(f))
+                        .sort();
+                      const voies = Array.from(card.voies)
+                        .map((v) => capitalize(v))
                         .sort();
                       const cardKey = isNA
                         ? `${card.voie}|NA|${card.specialites[0]?.url}`
@@ -221,6 +239,14 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
                           </CardHeader>
                           <CardContent>
                             <FormeBadges formes={formes} />
+                            {isOther && voies.length > 0 && (
+                              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  Voies :
+                                </span>
+                                <FormeBadges formes={voies} />
+                              </div>
+                            )}
                             <p className="text-xs text-muted-foreground mt-2">
                               {isNA ? (
                                 <>Cliquez pour accéder au RCP.</>
