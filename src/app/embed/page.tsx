@@ -22,9 +22,20 @@ export default async function Home({ searchParams }: HomeProps) {
       {!hasResults ? (
         <div className="text-center text-md mt-10">
           <p className="mb-4">
-            Aucun résultat pour le code ATC <strong>{atc}</strong>.
+            <strong>Aucun résultat</strong>
           </p>
-          <p>Vérifiez le code ATC et réessayez.</p>
+          <p>
+            Nous vous invitons à poursuivre votre recherche sur la{" "}
+            <a
+              className="underline hover:text-foreground"
+              href="https://base-donnees-publique.medicaments.gouv.fr/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              base de données publique des médicaments
+            </a>
+            .
+          </p>
         </div>
       ) : (
         <Results atc={atc} isEmbed data={results} />

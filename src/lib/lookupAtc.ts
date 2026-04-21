@@ -24,18 +24,31 @@ const normalizeDosage = (quantite: string, reference?: string): string => {
   return cleanDosageValue(pure);
 };
 
+const UNIT = "(?:mg|g|ml|µg|microgrammes?|UI|MUI|%|pour\\s+cent)";
+
+const normalizePourCent = (s: string): string =>
+  s.replace(/\s*pour\s+cent\b/gi, "%");
+
 const extractDosageFromLabel = (label: string): string | null => {
   // Pattern composé : "500 microgrammes/50 microgrammes/dose" ou "100 mg/12,5 mg par mL"
   const compoundMatch = label.match(
-    /(\d+[\d,./]*\s*(?:mg|g|ml|µg|microgrammes?|UI|MUI|%)\s*\/\s*\d+[\d,./]*\s*(?:mg|g|ml|µg|microgrammes?|UI|MUI|%)(?:\s*\/\s*(?:dose|ml|mL))?)/i,
+    new RegExp(
+      `(\\d+[\\d,./]*\\s*${UNIT}\\s*\\/\\s*\\d+[\\d,./]*\\s*${UNIT}(?:\\s*\\/\\s*(?:dose|ml|mL))?)`,
+      "i",
+    ),
   );
-  if (compoundMatch) return cleanDosageValue(compoundMatch[1].trim());
+  if (compoundMatch)
+    return cleanDosageValue(normalizePourCent(compoundMatch[1].trim()));
 
-  // Pattern simple : "400 mg" ou "20 mg/1 ml"
+  // Pattern simple : "400 mg", "20 mg/1 ml", "2,5 POUR CENT"
   const simpleMatch = label.match(
-    /(\d+[\d,./]*\s*(?:mg|g|ml|µg|microgrammes?|UI|MUI|%|mg\/ml|mg\/mL)(?:\s*\/\s*\d+\s*m[lL])?)/i,
+    new RegExp(
+      `(\\d+[\\d,./]*\\s*(?:${UNIT}|mg\\/ml|mg\\/mL)(?:\\s*\\/\\s*\\d+\\s*m[lL])?)`,
+      "i",
+    ),
   );
-  if (simpleMatch) return cleanDosageValue(simpleMatch[1].trim());
+  if (simpleMatch)
+    return cleanDosageValue(normalizePourCent(simpleMatch[1].trim()));
 
   return null;
 };
@@ -44,7 +57,7 @@ type RawSpecialite = {
   label: string;
   url: string;
   forme: string;
-  voie: string;
+  voies: Set<string>;
   substances: Set<string>;
   dosages: Set<string>;
 };
@@ -120,13 +133,17 @@ LIMIT 200`,
           label: binding.label.value,
           url: `https://base-donnees-publique.medicaments.gouv.fr/affichageDoc.php?specid=${CIS}&typedoc=R`,
           forme: binding.forme?.value ?? "N/A",
-          voie: binding.voie?.value ?? "N/A",
+          voies: new Set(),
           substances: new Set(),
           dosages: new Set(),
         });
       }
 
       const spe = bySpecialite.get(uri)!;
+
+      if (binding.voie?.value) {
+        spe.voies.add(binding.voie.value);
+      }
 
       if (binding.substance?.value) {
         spe.substances.add(binding.substance.value);
@@ -142,6 +159,7 @@ LIMIT 200`,
     }
 
     // Étape 2 : grouper par substance + dosage + forme + voie
+    // A specialite with N voies produces N group entries (one per voie).
     const groups = new Map<string, SpecialiteGroup>();
 
     for (const spe of bySpecialite.values()) {
@@ -152,22 +170,31 @@ LIMIT 200`,
         extractDosageFromLabel(spe.label) ||
         "N/A";
 
-      const key = `${substance}|${dosage}|${spe.forme}|${spe.voie}`;
+      const voies = spe.voies.size > 0 ? [...spe.voies] : ["N/A"];
 
-      if (!groups.has(key)) {
-        groups.set(key, {
-          substance,
-          dosage,
-          forme: spe.forme,
-          voie: spe.voie,
-          specialites: [],
+      for (const voie of voies) {
+        // When dosage is unknown we can't safely group (different dosages would be conflated),
+        // so each specialite becomes its own group via the unique URL.
+        const key =
+          dosage === "N/A"
+            ? `${substance}|N/A|${spe.forme}|${voie}|${spe.url}`
+            : `${substance}|${dosage}|${spe.forme}|${voie}`;
+
+        if (!groups.has(key)) {
+          groups.set(key, {
+            substance,
+            dosage,
+            forme: spe.forme,
+            voie,
+            specialites: [],
+          });
+        }
+
+        groups.get(key)!.specialites.push({
+          label: spe.label,
+          url: spe.url,
         });
       }
-
-      groups.get(key)!.specialites.push({
-        label: spe.label,
-        url: spe.url,
-      });
     }
 
     return Array.from(groups.values());

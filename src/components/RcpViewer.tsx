@@ -50,7 +50,12 @@ const RcpViewer = ({ name, sections, sourceUrl, siblings }: RcpViewerProps) => {
       <div className="mb-6 border-b pb-4 text-sm text-zinc-600 space-y-2">
         <p>
           RCP de{" "}
-          <a className="underline hover:text-foreground" href={sourceUrl}>
+          <a
+            className="underline hover:text-foreground"
+            href={sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {name || "cette specialite"}
           </a>
           , choisi de manière aléatoire parmi les {siblings.length} RCP

@@ -30,6 +30,16 @@ const getVoieBadgeClass = (voie: string): string => {
   return "bg-gray-500 text-white";
 };
 
+/** Voies without a predefined color are bucketed under "Autres". */
+const OTHER_VOIE_KEY = "Autres";
+const getVoieGroupKey = (voie: string): string => {
+  const key = voie.toLowerCase();
+  for (const k of Object.keys(voieColors)) {
+    if (key.includes(k)) return voie;
+  }
+  return OTHER_VOIE_KEY;
+};
+
 const capitalize = (s: string) =>
   s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
@@ -85,7 +95,11 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
     if (!byMolecule.has(mol)) byMolecule.set(mol, new Map());
     const cards = byMolecule.get(mol)!;
 
-    const key = `${group.voie}|${group.dosage}`;
+    // N/A groups stay separate (each specialite keeps its own card).
+    const key =
+      group.dosage === "N/A"
+        ? `${group.voie}|N/A|${group.specialites[0]?.url ?? Math.random()}`
+        : `${group.voie}|${group.dosage}`;
     if (!cards.has(key)) {
       cards.set(key, {
         voie: group.voie,
@@ -100,9 +114,22 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
     card.specialites.push(...group.specialites);
   }
 
+  // Trier les molécules : celles avec au moins une voie "principale" d'abord,
+  // puis celles n'ayant que des voies "Autres", puis alpha.
+  const sortedMolecules = Array.from(byMolecule.entries()).sort(
+    ([molA, cardsMapA], [molB, cardsMapB]) => {
+      const hasMain = (m: Map<string, FlatCard>) =>
+        [...m.values()].some((c) => getVoieGroupKey(c.voie) !== OTHER_VOIE_KEY);
+      const aOnlyOther = hasMain(cardsMapA) ? 0 : 1;
+      const bOnlyOther = hasMain(cardsMapB) ? 0 : 1;
+      if (aOnlyOther !== bOnlyOther) return aOnlyOther - bOnlyOther;
+      return molA.localeCompare(molB);
+    },
+  );
+
   return (
     <div className="w-full">
-      {Array.from(byMolecule.entries()).map(([molecule, cardsMap]) => {
+      {sortedMolecules.map(([molecule, cardsMap]) => {
         const cards = Array.from(cardsMap.values()).sort((a, b) => {
           const aOrale = a.voie.toLowerCase().includes("orale") ? 0 : 1;
           const bOrale = b.voie.toLowerCase().includes("orale") ? 0 : 1;
@@ -115,15 +142,19 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
           return dosageToMg(a.dosage) - dosageToMg(b.dosage);
         });
 
-        // Grouper les cards par voie
+        // Grouper les cards par voie (voies non colorées → "Autres")
         const byVoie = new Map<string, FlatCard[]>();
         for (const card of cards) {
-          if (!byVoie.has(card.voie)) byVoie.set(card.voie, []);
-          byVoie.get(card.voie)!.push(card);
+          const groupKey = getVoieGroupKey(card.voie);
+          if (!byVoie.has(groupKey)) byVoie.set(groupKey, []);
+          byVoie.get(groupKey)!.push(card);
         }
 
-        // Trier les voies : orale d'abord, puis alpha
+        // Trier les voies : orale d'abord, "Autres" à la fin, le reste alpha
         const sortedVoies = Array.from(byVoie.keys()).sort((a, b) => {
+          const aOther = a === OTHER_VOIE_KEY ? 1 : 0;
+          const bOther = b === OTHER_VOIE_KEY ? 1 : 0;
+          if (aOther !== bOther) return aOther - bOther;
           const aOrale = a.toLowerCase().includes("orale") ? 0 : 1;
           const bOrale = b.toLowerCase().includes("orale") ? 0 : 1;
           if (aOrale !== bOrale) return aOrale - bOrale;
@@ -161,18 +192,16 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 pl-6 pt-2 pb-4">
                     {byVoie.get(voie)!.map((card) => {
                       const isNA = card.dosage === "N/A";
+                      const displayDosage = isNA ? "Dosage non spécifié" : card.dosage;
                       const formes = Array.from(card.formes)
                         .map((f) => capitalize(f))
                         .sort();
+                      const cardKey = isNA
+                        ? `${card.voie}|NA|${card.specialites[0]?.url}`
+                        : `${card.voie}|${card.dosage}`;
 
                       const cardContent = (
-                        <Card
-                          className={`h-full shadow-none transition-colors ${
-                            isNA
-                              ? "opacity-50 cursor-default"
-                              : "cursor-pointer hover:bg-accent"
-                          }`}
-                        >
+                        <Card className="h-full shadow-none transition-colors cursor-pointer hover:bg-accent">
                           <CardHeader>
                             <div className="flex flex-wrap gap-2">
                               <Badge
@@ -181,39 +210,39 @@ const Results = ({ atc, isEmbed, data }: ResultsProps) => {
                                 {capitalize(card.voie)}
                               </Badge>
                               <Badge variant="outline" className="w-fit">
-                                {card.dosage}
+                                {displayDosage}
                               </Badge>
                             </div>
                             <CardTitle className="text-lg truncate">
-                              {capitalize(molecule)} {card.dosage}
+                              {isNA
+                                ? capitalize(card.specialites[0]?.label ?? molecule)
+                                : `${capitalize(molecule)} ${card.dosage}`}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
                             <FormeBadges formes={formes} />
                             <p className="text-xs text-muted-foreground mt-2">
-                              Il existe{" "}
-                              <span className="font-semibold">
-                                {card.specialites.length} RCP
-                              </span>{" "}
-                              identique{card.specialites.length > 1 ? "s" : ""}{" "}
-                              pour cette combinaison. Cliquez pour accéder à un
-                              RCP aléatoire parmi ces derniers.
+                              {isNA ? (
+                                <>Cliquez pour accéder au RCP.</>
+                              ) : (
+                                <>
+                                  Il existe{" "}
+                                  <span className="font-semibold">
+                                    {card.specialites.length} RCP
+                                  </span>{" "}
+                                  identique{card.specialites.length > 1 ? "s" : ""}{" "}
+                                  pour cette combinaison. Cliquez pour accéder à un
+                                  RCP aléatoire parmi ces derniers.
+                                </>
+                              )}
                             </p>
                           </CardContent>
                         </Card>
                       );
 
-                      if (isNA) {
-                        return (
-                          <div key={`${card.voie}|${card.dosage}`}>
-                            {cardContent}
-                          </div>
-                        );
-                      }
-
                       return (
                         <RandomRcpLink
-                          key={`${card.voie}|${card.dosage}`}
+                          key={cardKey}
                           atc={atc}
                           isEmbed={isEmbed}
                           specialites={card.specialites}
