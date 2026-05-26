@@ -1,17 +1,43 @@
 import { Binding, SpecialiteGroup } from "@/types/global";
 
 const cleanDosageValue = (dosage: string): string => {
-  return dosage
+  const result = dosage
+    .replace(/\s*pour\s+cent\b/gi, "%")
     .replace(/\s*\/\s*/g, "/") // normalise espaces autour des /
-    .replace(/(\d+)[.,]0+(\s)/g, "$1$2")
-    .replace(/^(\d+)[.,]0+$/, "$1")
+    .replace(/(\d+[.,]\d*[1-9])0+/g, "$1") // 1,50 → 1,5 ; 1,500 → 1,5
+    .replace(/(\d+)[.,]0+(\s|\/|$)/g, "$1$2") // 1,0 g / 1,0/... / 1,0 → 1
     .replace(/\b1000\s*mg\b/gi, "1 g");
+
+  // "X u/100 u" avec unités identiques (ex. "1 g/100 g") → "X %"
+  const sameUnit = result.match(/^([\d.,]+)\s*([a-zµμ]+)\/100\s*\2$/i);
+  if (sameUnit) return `${sameUnit[1]} %`;
+
+  // "X/100 u" (unité du numérateur implicite) → "X %"
+  const impliedUnit = result.match(/^([\d.,]+)\/100\s*[a-zµμ]+$/i);
+  if (impliedUnit) return `${impliedUnit[1]} %`;
+
+  // "X/100" (ratio pur) → "X %"
+  const noUnit = result.match(/^([\d.,]+)\/100$/);
+  if (noUnit) return `${noUnit[1]} %`;
+
+  // "X%" ou "X  %" → "X %" (espacement uniforme)
+  const pct = result.match(/^([\d.,]+)\s*%$/);
+  if (pct) return `${pct[1]} %`;
+
+  return result;
 };
 
 const normalizeDosage = (quantite: string, reference?: string): string => {
   if (!reference) return cleanDosageValue(quantite);
 
-  const pure = quantite.replace(reference, "").trim();
+  // On essaye d'abord de retirer la référence telle quelle. Si elle n'apparaît
+  // pas dans quantite (typos genre "créme" vs "crème"), on retombe sur
+  // l'extraction du motif numérique + unité en tête de quantite.
+  let pure = quantite.replace(reference, "").trim();
+  if (pure === quantite.trim()) {
+    const leadingMatch = quantite.match(/^([\d.,]+(?:\s*[a-zµμ]+)?)/i);
+    if (leadingMatch) pure = leadingMatch[1].trim();
+  }
 
   const unitMatch = reference.match(/^pour\s+([\d,]+\s*\w+)/);
   if (unitMatch) {
@@ -26,9 +52,6 @@ const normalizeDosage = (quantite: string, reference?: string): string => {
 
 const UNIT = "(?:mg|g|ml|µg|microgrammes?|UI|MUI|%|pour\\s+cent)";
 
-const normalizePourCent = (s: string): string =>
-  s.replace(/\s*pour\s+cent\b/gi, "%");
-
 const extractDosageFromLabel = (label: string): string | null => {
   // Pattern composé : "500 microgrammes/50 microgrammes/dose" ou "100 mg/12,5 mg par mL"
   const compoundMatch = label.match(
@@ -37,8 +60,7 @@ const extractDosageFromLabel = (label: string): string | null => {
       "i",
     ),
   );
-  if (compoundMatch)
-    return cleanDosageValue(normalizePourCent(compoundMatch[1].trim()));
+  if (compoundMatch) return cleanDosageValue(compoundMatch[1].trim());
 
   // Pattern simple : "400 mg", "20 mg/1 ml", "2,5 POUR CENT"
   const simpleMatch = label.match(
@@ -47,8 +69,7 @@ const extractDosageFromLabel = (label: string): string | null => {
       "i",
     ),
   );
-  if (simpleMatch)
-    return cleanDosageValue(normalizePourCent(simpleMatch[1].trim()));
+  if (simpleMatch) return cleanDosageValue(simpleMatch[1].trim());
 
   return null;
 };
