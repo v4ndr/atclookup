@@ -1,5 +1,51 @@
 import { Binding, SpecialiteGroup } from "@/types/global";
 
+// Facteurs de conversion vers une unité de base par dimension
+const MASS_TO_MG: Record<string, number> = {
+  g: 1000,
+  mg: 1,
+  µg: 0.001,
+  μg: 0.001,
+  microgramme: 0.001,
+  microgrammes: 0.001,
+};
+
+const VOLUME_TO_ML: Record<string, number> = {
+  l: 1000,
+  ml: 1,
+};
+
+const parseNum = (s: string): number => parseFloat(s.replace(",", "."));
+
+const formatPercent = (n: number): string => {
+  const rounded = Math.round(n * 1e8) / 1e8;
+  const s = rounded.toFixed(8).replace(/\.?0+$/, "").replace(".", ",");
+  return `${s} %`;
+};
+
+// Convertit un ratio "X u1 / Y u2" en pourcentage si u1 et u2 sont de même
+// dimension (masse ou volume). Retourne null sinon.
+const ratioToPercent = (s: string): string | null => {
+  const m = s.match(/^([\d.,]+)\s*([a-zµμ]+)\/([\d.,]*)\s*([a-zµμ]+)$/i);
+  if (!m) return null;
+  const u1 = m[2].toLowerCase();
+  const u2 = m[4].toLowerCase();
+
+  let mult: number;
+  if (u1 in MASS_TO_MG && u2 in MASS_TO_MG) {
+    mult = MASS_TO_MG[u1] / MASS_TO_MG[u2];
+  } else if (u1 in VOLUME_TO_ML && u2 in VOLUME_TO_ML) {
+    mult = VOLUME_TO_ML[u1] / VOLUME_TO_ML[u2];
+  } else {
+    return null;
+  }
+
+  const num = parseNum(m[1]);
+  const denom = m[3] === "" ? 1 : parseNum(m[3]);
+  if (!isFinite(num) || !isFinite(denom) || denom === 0) return null;
+  return formatPercent(((num * mult) / denom) * 100);
+};
+
 const cleanDosageValue = (dosage: string): string => {
   const result = dosage
     .replace(/\s*pour\s+cent\b/gi, "%")
@@ -8,11 +54,12 @@ const cleanDosageValue = (dosage: string): string => {
     .replace(/(\d+)[.,]0+(\s|\/|$)/g, "$1$2") // 1,0 g / 1,0/... / 1,0 → 1
     .replace(/\b1000\s*mg\b/gi, "1 g");
 
-  // "X u/100 u" avec unités identiques (ex. "1 g/100 g") → "X %"
-  const sameUnit = result.match(/^([\d.,]+)\s*([a-zµμ]+)\/100\s*\2$/i);
-  if (sameUnit) return `${sameUnit[1]} %`;
+  // "X u1/Y u2" avec unités de même dimension → "Z %"
+  // Couvre "1 g/100 g", "20 mg/1 g", "5 mg/100 mg", "1 ml/100 ml"...
+  const ratio = ratioToPercent(result);
+  if (ratio) return ratio;
 
-  // "X/100 u" (unité du numérateur implicite) → "X %"
+  // "X/100 u" (unité du numérateur implicite, sortie typique du SPARQL) → "X %"
   const impliedUnit = result.match(/^([\d.,]+)\/100\s*[a-zµμ]+$/i);
   if (impliedUnit) return `${impliedUnit[1]} %`;
 
