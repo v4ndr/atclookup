@@ -103,6 +103,11 @@ const sparql = async (query: string, retries = 6): Promise<Binding[]> => {
     // Backoff exponentiel + jitter : le SMT bannit brièvement en cas de rafale.
     if (attempt > 0) await sleep(500 * 2 ** (attempt - 1) + Math.random() * 400);
     let res: Response;
+    // Timeout dur par tentative : sans cela, une socket coupée (ex. mise en
+    // veille du job) laisse le fetch pendre indéfiniment. AbortController borne
+    // chaque essai ; l'échec bascule sur le retry/backoff.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30_000);
     try {
       res = await fetch(SPARQL_ENDPOINT, {
         method: "POST",
@@ -111,9 +116,12 @@ const sparql = async (query: string, retries = 6): Promise<Binding[]> => {
           Accept: "application/sparql-results+json",
         },
         body,
+        signal: ctrl.signal,
       });
     } catch {
-      continue; // erreur réseau : on retente
+      continue; // erreur réseau / timeout : on retente
+    } finally {
+      clearTimeout(timer);
     }
     if (res.ok) {
       const data = (await res.json()) as { results: { bindings: Binding[] } };
@@ -169,15 +177,26 @@ const aggregate = (rows: Binding[]): RuimRecord[] => {
   return out;
 };
 
+/** Curseur de pagination = plus grand URI de spécialité d'une page. */
+export const cursorOf = (records: RuimRecord[]): string =>
+  records.reduce((max, r) => (r.uri > max ? r.uri : max), "");
+
 /**
- * Récupère une page de spécialités actives du RUIM. La pagination porte sur un
- * sous-SELECT DISTINCT ?s (donc par spécialité, sans coupure au milieu d'une
- * spécialité), puis on ramène tous les détails et on agrège en JS. `mode` choisit
- * la population : celles qui portent un codeATC, ou celles qui n'en portent pas
- * (mais ont une substance active — pour détecter les ATC manquants côté RUIM).
+ * Récupère une page de spécialités actives du RUIM par **pagination keyset**
+ * (`?s > after`) et non par OFFSET : le SMT renvoie une erreur 500 sur les
+ * OFFSET profonds (> ~10 000), alors que le keyset est à coût constant quelle
+ * que soit la profondeur. La pagination porte sur un sous-SELECT DISTINCT ?s
+ * (donc par spécialité, sans coupure), puis on ramène les détails et on agrège
+ * en JS. `after` est l'URI de la dernière spécialité de la page précédente
+ * (chaîne vide pour la première page). `mode` choisit la population : celles qui
+ * portent un codeATC, ou celles qui n'en portent pas mais ont une substance
+ * active (pour détecter les ATC manquants côté RUIM).
+ *
+ * L'appelant fait avancer le curseur via `cursorOf(records)` ; une page de
+ * moins de `limit` spécialités signale la fin.
  */
 export const fetchRuimPage = async (
-  offset: number,
+  after: string,
   limit: number,
   mode: RuimMode = "with-atc",
 ): Promise<RuimRecord[]> => {
@@ -191,14 +210,15 @@ export const fetchRuimPage = async (
       ? `?s ansm:codeATC ?atc .
   OPTIONAL { ?s ansm:libelleATC ?lib }`
       : ``;
+  const cursor = after ? ` FILTER(STR(?s) > ${JSON.stringify(after)})` : ``;
 
   const query = `PREFIX ansm: <http://data.esante.gouv.fr/ansm/medicament/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 SELECT ?s ?label ?atc ?lib ?subst WHERE {
   { SELECT DISTINCT ?s WHERE {
       ${inner}
-      FILTER NOT EXISTS { ?s ansm:dateFin ?df }
-  } ORDER BY ?s OFFSET ${offset} LIMIT ${limit} }
+      FILTER NOT EXISTS { ?s ansm:dateFin ?df }${cursor}
+  } ORDER BY ?s LIMIT ${limit} }
   ?s rdfs:label ?label .
   ${detail}
   OPTIONAL { ?s ansm:seComposeDe ?c . ?c ansm:substanceActive ?su .

@@ -4,6 +4,7 @@ import formatQuery from "@/lib/formatQuery";
 import {
   auditByAtc,
   auditRecords,
+  cursorOf,
   emptySummary,
   fetchRuimPage,
   tally,
@@ -64,8 +65,10 @@ export async function GET(request: NextRequest) {
   }
 
   // --- Mode base entière : une page, streamée en NDJSON ---
+  // Pagination keyset : le client passe `after` = `nextCursor` de la page
+  // précédente (vide pour la première). `done:true` signale la fin.
   if (params.get("all") !== null) {
-    const offset = Math.max(0, Number(params.get("offset")) || 0);
+    const after = params.get("after") ?? "";
     const limit = Math.min(1000, Math.max(1, Number(params.get("limit")) || 500));
     const mode: RuimMode =
       params.get("mode") === "without-atc" ? "without-atc" : "with-atc";
@@ -76,14 +79,22 @@ export async function GET(request: NextRequest) {
         const line = (obj: unknown) =>
           controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
         try {
-          const records = await fetchRuimPage(offset, limit, mode);
-          line({ type: "meta", offset, limit, mode, count: records.length });
+          const records = await fetchRuimPage(after, limit, mode);
+          const nextCursor = cursorOf(records);
+          line({ type: "meta", after, limit, mode, count: records.length });
           const summary = emptySummary();
           await auditRecords(records, concurrency, (r: AuditResult) => {
             tally(summary, r);
             line({ type: "result", ...r });
           });
-          line({ type: "summary", offset, mode, summary });
+          line({
+            type: "summary",
+            after,
+            nextCursor,
+            mode,
+            summary,
+            done: records.length < limit,
+          });
         } catch (e) {
           line({ type: "error", error: e instanceof Error ? e.message : String(e) });
         } finally {

@@ -26,6 +26,7 @@ import fs from "node:fs";
 import {
   auditRecords,
   countRuim,
+  cursorOf,
   emptySummary,
   fetchRuimPage,
   tally,
@@ -69,12 +70,23 @@ const pct = (a: number, b: number): string =>
   b ? `${((100 * a) / b).toFixed(1)}%` : "—";
 
 // --- Boucle principale -----------------------------------------------------
+// Reprise : le checkpoint stocke { cursor, processed } (curseur keyset = URI de
+// la dernière spécialité traitée, processed = compteur pour l'affichage %).
+type Checkpoint = { cursor: string; processed: number };
+const readCheckpoint = (): Checkpoint | null => {
+  if (!RESUME || !fs.existsSync(CKPT)) return null;
+  try {
+    const c = JSON.parse(fs.readFileSync(CKPT, "utf-8")) as Checkpoint;
+    return typeof c.cursor === "string" ? c : null;
+  } catch {
+    return null;
+  }
+};
+
 const run = async (): Promise<void> => {
-  const startOffset = RESUME && fs.existsSync(CKPT)
-    ? Number(fs.readFileSync(CKPT, "utf-8").trim()) || 0
-    : 0;
+  const resumed = readCheckpoint();
   const outStream = fs.createWriteStream(OUT, {
-    flags: RESUME && startOffset > 0 ? "a" : "w",
+    flags: resumed ? "a" : "w",
   });
 
   const summary: AuditSummary = emptySummary();
@@ -87,15 +99,21 @@ const run = async (): Promise<void> => {
         `(concurrency=${CONCURRENCY}, page=${PAGE})`,
     );
 
-    let offset = mode === MODES[0] ? startOffset : 0;
-    let processed = offset;
+    // La reprise ne s'applique qu'au premier mode traité.
+    let cursor = mode === MODES[0] && resumed ? resumed.cursor : "";
+    let processed = mode === MODES[0] && resumed ? resumed.processed : 0;
+    let fails = 0;
     while (processed < total) {
-      const limit = Math.min(PAGE, total - processed);
       let records: RuimRecord[];
       try {
-        records = await fetchRuimPage(offset, limit, mode);
+        records = await fetchRuimPage(cursor, PAGE, mode);
+        fails = 0;
       } catch (e) {
-        log(`  ! page offset=${offset} en échec (${(e as Error).message}), retry dans 3s`);
+        if (++fails >= 6) {
+          log(`  ✗ page abandonnée après ${fails} échecs (${(e as Error).message})`);
+          throw e;
+        }
+        log(`  ! page en échec (${(e as Error).message}), retry ${fails}/6 dans 3s`);
         await new Promise((r) => setTimeout(r, 3000));
         continue;
       }
@@ -108,9 +126,9 @@ const run = async (): Promise<void> => {
         }
       });
 
-      offset += records.length;
+      cursor = cursorOf(records) || cursor;
       processed += records.length;
-      fs.writeFileSync(CKPT, String(offset));
+      fs.writeFileSync(CKPT, JSON.stringify({ cursor, processed }));
 
       const el = (Date.now() - t0) / 1000;
       const rate = summary.total / Math.max(el, 0.001);
@@ -120,6 +138,8 @@ const run = async (): Promise<void> => {
           `rcp∅=${summary.categories.RCP_INCOMPLET} ruim∅=${summary.categories.RUIM_INCOMPLET}  ` +
           `${rate.toFixed(1)}/s`,
       );
+
+      if (records.length < PAGE) break; // dernière page
     }
   }
 

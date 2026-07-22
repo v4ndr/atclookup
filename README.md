@@ -91,9 +91,11 @@ reprise. Le moteur (`src/lib/auditAtc.ts`) est autonome et partagé avec l'API.
 
 - `GET /api/audit?atc=CODE` — audit ciblé d'un code ATC (toutes ses spécialités
   RUIM), réponse JSON agrégée avec le verdict sur chaque incohérence.
-- `GET /api/audit?all=1&offset=0&limit=500[&mode=]` — audit d'une page de la base
+- `GET /api/audit?all=1&after=&limit=500[&mode=]` — audit d'une page de la base
   entière, streamé en **NDJSON** (ligne `meta`, une ligne par spécialité, ligne
-  `summary`). `concurrency` borne le parallélisme. Même protection `ADMIN_TOKEN`.
+  `summary`). Pagination **keyset** : le client rappelle avec `after` = le
+  `nextCursor` de la page précédente jusqu'à `done:true`. `concurrency` borne le
+  parallélisme. Même protection `ADMIN_TOKEN`.
 
 ## Open source
 
