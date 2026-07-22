@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -21,9 +21,32 @@ type Finding = {
   ruimAtc: string[];
   ruimLibelle: string | null;
   rcpAtc: string[];
+  rcpLibelle: string | null;
   verdict: "RCP" | "RUIM" | "AMBIGU" | "INDETERMINE" | null;
   relation: "divergence" | "ruim_parent" | "rcp_parent" | "egal";
   bucket: Bucket;
+  rcpUrl: string;
+};
+
+type RcpIncomplet = {
+  cis: string;
+  label: string;
+  substances: string[];
+  ruimAtc: string[];
+  ruimLibelle: string | null;
+  ctx: string | null;
+  rcpUrl: string;
+};
+
+// Spécialité active dont le RUIM ne porte aucun code ATC et dont le RCP n'en
+// donne pas non plus (invérifiable). Celles dont le RCP donne un code sont
+// reclassées « Erreur RUIM » côté données.
+type RuimSansCode = {
+  cis: string;
+  label: string;
+  substances: string[];
+  ctx: string | null;
+  rcpAvailable: boolean;
   rcpUrl: string;
 };
 
@@ -36,25 +59,44 @@ export type AuditData = {
     buckets: Record<Bucket, number>;
   };
   findings: Finding[];
-  rcpIncompletSample: {
-    cis: string;
-    label: string;
-    ruimAtc: string[];
-    ctx: string;
-    rcpUrl: string;
-  }[];
-  rcpIncompletTotal: number;
+  rcpIncomplets: RcpIncomplet[];
+  ruimSansCode: RuimSansCode[];
 };
 
-// ---------------------------------------------------------------------------
-// Métadonnées de présentation des catégories (buckets)
-// ---------------------------------------------------------------------------
-const BUCKETS: {
-  key: Bucket;
+// Ligne unifiée pour l'affichage.
+type Row = {
+  cis: string;
   label: string;
-  desc: string;
-  tone: string; // classes de la pastille de comptage
-}[] = [
+  substances: string[];
+  ruimAtc: string[];
+  ruimLibelle: string | null;
+  rcpAtc: string[];
+  rcpLibelle: string | null;
+  ctx: string | null;
+  verdict: Finding["verdict"];
+  rcpUrl: string;
+  catLabel: string;
+  bucket?: Bucket;
+  side?: "RCP" | "RUIM";
+};
+
+type Tab = Bucket | "TOUT" | "SANS_CODE";
+type IncompletSide = "RUIM" | "RCP" | "BOTH";
+const PER_PAGE = 50;
+
+// ---------------------------------------------------------------------------
+// Utilitaires
+// ---------------------------------------------------------------------------
+const norm = (s: string): string =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+const atcRegistryUrl = (code: string) =>
+  `https://atcddd.fhi.no/atc_ddd_index/?code=${encodeURIComponent(code)}&showdescription=no`;
+
+// ---------------------------------------------------------------------------
+// Métadonnées des catégories
+// ---------------------------------------------------------------------------
+const BUCKETS: { key: Bucket; label: string; desc: string; tone: string }[] = [
   {
     key: "RUIM_ERREUR",
     label: "Erreur RUIM",
@@ -63,7 +105,7 @@ const BUCKETS: {
   },
   {
     key: "RCP_ERREUR",
-    label: "Erreur / typo RCP",
+    label: "Erreur RCP",
     desc: "Le code du RCP est erroné ou mal saisi ; le RUIM est cohérent avec la substance.",
     tone: "bg-amber-500 text-white dark:bg-amber-600",
   },
@@ -81,56 +123,178 @@ const BUCKETS: {
   },
   {
     key: "GRANULARITE",
-    label: "Granularité",
-    desc: "Le code RUIM est un parent (moins précis) du code RCP, ou l'inverse. Ce n'est pas une erreur de classe.",
+    label: "Codes incomplets",
+    desc: "Un côté ne donne pas de code ATC complet (niveau 5). Filtrer selon le côté incomplet.",
     tone: "bg-muted text-muted-foreground",
   },
   {
     key: "MULTI",
-    label: "Multi-codes",
-    desc: "Les jeux de codes se recoupent partiellement (spécialités multi-codes / associations).",
+    label: "Multi-codes RCP",
+    desc: "",
     tone: "bg-muted text-muted-foreground",
   },
 ];
 
-const verdictBadge = (v: Finding["verdict"]) => {
-  if (v === "RCP") return { text: "RCP a raison", cls: "bg-destructive text-white" };
-  if (v === "RUIM") return { text: "RUIM a raison", cls: "bg-amber-500 text-white dark:bg-amber-600" };
-  if (v === "AMBIGU") return { text: "ambigu", cls: "bg-secondary text-secondary-foreground" };
-  return { text: "indéterminé", cls: "bg-muted text-muted-foreground" };
+const bucketLabel = Object.fromEntries(BUCKETS.map((b) => [b.key, b.label])) as Record<Bucket, string>;
+
+const RCP_INCOMPLET_LABEL = "RCP incomplet";
+const PAS_DE_CODE_LABEL = "Pas de code ATC";
+const catTone = (label: string): string => {
+  const b = BUCKETS.find((x) => x.label === label);
+  if (b) return b.tone;
+  if (label === RCP_INCOMPLET_LABEL) return "bg-amber-500/80 text-white dark:bg-amber-600";
+  return "bg-muted text-muted-foreground";
 };
 
-const Code = ({ children }: { children: React.ReactNode }) => (
-  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</code>
-);
+const verdictBadge = (v: Finding["verdict"]) => {
+  if (v === "RCP") return { text: "RCP OK", cls: "bg-destructive text-white" };
+  if (v === "RUIM") return { text: "RUIM OK", cls: "bg-amber-500 text-white dark:bg-amber-600" };
+  if (v === "AMBIGU") return { text: "ambigu", cls: "bg-secondary text-secondary-foreground" };
+  return { text: "N/A", cls: "bg-muted text-muted-foreground" };
+};
+
+const AtcCodes = ({ codes }: { codes: string[] }) =>
+  codes.length ? (
+    <span className="inline-flex flex-wrap gap-1">
+      {codes.map((c) => (
+        <a
+          key={c}
+          href={atcRegistryUrl(c)}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs hover:underline"
+          title="Voir dans le registre WHO ATC/DDD"
+        >
+          {c}
+        </a>
+      ))}
+    </span>
+  ) : (
+    <span className="font-mono text-xs text-muted-foreground">∅</span>
+  );
 
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
 export default function AuditReport({ data }: { data: AuditData }) {
-  const [active, setActive] = useState<Bucket>("RUIM_ERREUR");
+  const [active, setActive] = useState<Tab>("RUIM_ERREUR");
   const [query, setQuery] = useState("");
+  const [side, setSide] = useState<IncompletSide>("RUIM");
+  const [page, setPage] = useState(0);
+
+  useEffect(() => setPage(0), [active, side, query]);
 
   const cat = data.summary.categories;
+  const bk = data.summary.buckets;
   const totalInc = data.findings.length;
+  const cErreurs = (bk.RUIM_ERREUR ?? 0) + (bk.RCP_ERREUR ?? 0);
+  const dAmbiguites = (bk.AMBIGU ?? 0) + (bk.INDETERMINE ?? 0) + (bk.MULTI ?? 0);
+  const eIncomplets = bk.GRANULARITE ?? 0;
+  const isIncomplet = active === "GRANULARITE";
+
+  // Toutes les lignes « incohérence » avec leur libellé de catégorie.
+  const findingRows: Row[] = useMemo(
+    () => data.findings.map((f) => ({ ...f, ctx: null, catLabel: bucketLabel[f.bucket], bucket: f.bucket })),
+    [data.findings],
+  );
+  const granulariteRows = useMemo(
+    () => findingRows.filter((r) => r.bucket === "GRANULARITE").map((r) => ({ ...r, side: "RUIM" as const })),
+    [findingRows],
+  );
+  const ruimSansCodeRows: Row[] = useMemo(
+    () =>
+      data.ruimSansCode.map((r) => ({
+        cis: r.cis,
+        label: r.label,
+        substances: r.substances,
+        ruimAtc: [],
+        ruimLibelle: null,
+        rcpAtc: [],
+        rcpLibelle: null,
+        ctx: r.ctx,
+        verdict: null,
+        rcpUrl: r.rcpUrl,
+        catLabel: PAS_DE_CODE_LABEL,
+        side: "RUIM" as const,
+      })),
+    [data.ruimSansCode],
+  );
+  // Côté « RUIM incomplet » = uniquement les codes trop larges (GRANULARITE).
+  const ruimIncompletRows = granulariteRows;
+  const rcpIncompletRows: Row[] = useMemo(
+    () =>
+      data.rcpIncomplets.map((r) => ({
+        cis: r.cis,
+        label: r.label,
+        substances: r.substances,
+        ruimAtc: r.ruimAtc,
+        ruimLibelle: r.ruimLibelle,
+        rcpAtc: [],
+        rcpLibelle: null,
+        ctx: r.ctx,
+        verdict: null,
+        rcpUrl: r.rcpUrl,
+        catLabel: RCP_INCOMPLET_LABEL,
+        side: "RCP" as const,
+      })),
+    [data.rcpIncomplets],
+  );
+
+  const rows: Row[] = useMemo(() => {
+    if (active === "TOUT") return [...findingRows, ...rcpIncompletRows, ...ruimSansCodeRows];
+    if (active === "SANS_CODE") return ruimSansCodeRows;
+    if (active === "GRANULARITE") {
+      if (side === "RUIM") return ruimIncompletRows;
+      if (side === "RCP") return rcpIncompletRows;
+      return [...ruimIncompletRows, ...rcpIncompletRows];
+    }
+    return findingRows.filter((r) => r.bucket === active);
+  }, [active, side, findingRows, ruimIncompletRows, rcpIncompletRows, ruimSansCodeRows]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return data.findings.filter((f) => {
-      if (f.bucket !== active) return false;
-      if (!q) return true;
-      return (
-        f.label.toLowerCase().includes(q) ||
-        f.cis.includes(q) ||
-        f.substances.some((s) => s.toLowerCase().includes(q)) ||
-        f.ruimAtc.some((c) => c.toLowerCase().includes(q)) ||
-        f.rcpAtc.some((c) => c.toLowerCase().includes(q)) ||
-        (f.ruimLibelle ?? "").toLowerCase().includes(q)
-      );
-    });
-  }, [data.findings, active, query]);
+    const q = norm(query.trim());
+    if (!q) return rows;
+    return rows.filter((r) =>
+      norm(
+        [
+          r.label,
+          r.cis,
+          r.substances.join(" "),
+          r.ruimAtc.join(" "),
+          r.rcpAtc.join(" "),
+          r.ruimLibelle ?? "",
+          r.rcpLibelle ?? "",
+          r.ctx ?? "",
+          r.catLabel,
+        ].join(" "),
+      ).includes(q),
+    );
+  }, [rows, query]);
 
-  const activeMeta = BUCKETS.find((b) => b.key === active)!;
+  const total = filtered.length;
+  const pageCount = Math.max(1, Math.ceil(total / PER_PAGE));
+  const cur = Math.min(page, pageCount - 1);
+  const shown = filtered.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+
+  const showCat = active === "TOUT";
+  const activeMeta =
+    active === "TOUT"
+      ? { desc: "Toutes les spécialités présentant un écart (incohérence, code incomplet ou absent)." }
+      : active === "SANS_CODE"
+        ? { desc: "Spécialités actives sans aucun code ATC exploitable, ni dans le RUIM ni dans le RCP BDPM." }
+        : BUCKETS.find((b) => b.key === active)!;
+
+  const TABS: { key: Tab; label: string; n: number; tone: string }[] = [
+    { key: "TOUT", label: "Tout", n: findingRows.length + rcpIncompletRows.length + ruimSansCodeRows.length, tone: "bg-foreground/10" },
+    ...BUCKETS.map((b) => ({ key: b.key, label: b.label, n: bk[b.key] ?? 0, tone: b.tone })),
+    { key: "SANS_CODE", label: "Pas de code ATC", n: ruimSansCodeRows.length, tone: "bg-muted text-muted-foreground" },
+  ];
+
+  const SIDE_TABS: { key: IncompletSide; label: string; n: number }[] = [
+    { key: "RUIM", label: "RUIM incomplet", n: ruimIncompletRows.length },
+    { key: "RCP", label: "RCP incomplet", n: rcpIncompletRows.length },
+    { key: "BOTH", label: "Les deux", n: ruimIncompletRows.length + rcpIncompletRows.length },
+  ];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -146,50 +310,54 @@ export default function AuditReport({ data }: { data: AuditData }) {
         </div>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
           Confrontation, spécialité par spécialité, du code ATC{" "}
-          <strong className="text-foreground">structuré</strong> du RUIM (ANS)
-          au code ATC en <strong className="text-foreground">texte libre</strong>{" "}
-          du RCP publié par la BDPM. Le verdict « qui a raison » est déterministe
-          (libellé OMS du code confronté à la substance active).
+          <strong className="text-foreground">structuré</strong> du RUIM (ANS) au
+          code ATC en <strong className="text-foreground">texte libre</strong> du
+          RCP publié par la BDPM.
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Base auditée : <strong className="text-foreground">{data.base.toLocaleString("fr-FR")}</strong>{" "}
+          Base auditée :{" "}
+          <strong className="text-foreground">{data.base.toLocaleString("fr-FR")}</strong>{" "}
           spécialités actives · généré le {data.generatedAt}
         </p>
       </header>
 
-      {/* Cartes récap */}
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Concordantes" value={cat.GREEN ?? 0} sub="RUIM = RCP" tone="text-emerald-600 dark:text-emerald-400" />
-        <StatCard label="Incohérences" value={totalInc} sub="codes différents" tone="text-destructive" />
-        <StatCard label="RCP incomplet" value={cat.RCP_INCOMPLET ?? 0} sub="pas de code niveau 5" tone="text-amber-600 dark:text-amber-400" />
-        <StatCard label="Erreurs RUIM" value={data.summary.buckets.RUIM_ERREUR} sub="à corriger à la source" tone="text-destructive" />
+      {/* Stats hiérarchiques : B = C + D + E */}
+      <div className="mb-8 space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <BigStat letter="A" label="Concordances" value={cat.GREEN ?? 0} tone="text-emerald-600 dark:text-emerald-400" />
+          <BigStat letter="B" label="Incohérences" value={totalInc} tone="text-destructive" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 border-l-2 border-border pl-3 sm:ml-6 sm:grid-cols-3">
+          <SubStat letter="C" label="Erreurs" value={cErreurs} />
+          <SubStat letter="D" label="Ambiguïtés" value={dAmbiguites} />
+          <SubStat letter="E" label="Codes incomplets" value={eIncomplets} />
+        </div>
       </div>
 
-      {/* Onglets par bucket */}
+      <h2 className="mb-4 text-lg font-semibold">Détail des {totalInc} incohérences</h2>
+
+      {/* Onglets */}
       <div className="mb-4 flex flex-wrap gap-2">
-        {BUCKETS.map((b) => {
-          const n = data.summary.buckets[b.key] ?? 0;
-          const on = active === b.key;
+        {TABS.map((t) => {
+          const on = active === t.key;
           return (
             <button
-              key={b.key}
-              onClick={() => setActive(b.key)}
+              key={t.key}
+              onClick={() => setActive(t.key)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                on
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border hover:bg-accent"
+                on ? "border-foreground bg-foreground text-background" : "border-border hover:bg-accent"
               }`}
             >
-              {b.label}
-              <span className={`rounded-full px-1.5 py-0.5 text-xs ${on ? "bg-background/20" : b.tone}`}>
-                {n}
+              {t.label}
+              <span className={`rounded-full px-1.5 py-0.5 text-xs ${on ? "bg-background/20" : t.tone}`}>
+                {t.n.toLocaleString("fr-FR")}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* Description du bucket actif + recherche */}
+      {/* Description + recherche */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-2xl text-sm text-muted-foreground">{activeMeta.desc}</p>
         <input
@@ -200,12 +368,32 @@ export default function AuditReport({ data }: { data: AuditData }) {
         />
       </div>
 
+      {/* Sous-filtre côté incomplet */}
+      {isIncomplet && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs uppercase text-muted-foreground">Côté incomplet</span>
+          {SIDE_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setSide(t.key)}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                side === t.key ? "border-foreground bg-foreground text-background" : "border-border hover:bg-accent"
+              }`}
+            >
+              {t.label}
+              <span className="opacity-70">{t.n.toLocaleString("fr-FR")}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Table */}
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-3 py-2 font-medium">Spécialité</th>
+              {showCat && <th className="px-3 py-2 font-medium">Catégorie</th>}
               <th className="px-3 py-2 font-medium">Substance</th>
               <th className="px-3 py-2 font-medium">RUIM</th>
               <th className="px-3 py-2 font-medium">RCP</th>
@@ -213,44 +401,55 @@ export default function AuditReport({ data }: { data: AuditData }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((f) => {
-              const vb = verdictBadge(f.verdict);
+            {shown.map((r) => {
+              const vb = verdictBadge(r.verdict);
               return (
-                <tr key={f.cis} className="border-t border-border align-top hover:bg-accent/40">
+                <tr key={r.cis} className="border-t border-border align-top hover:bg-accent/40">
                   <td className="px-3 py-2">
-                    <a
-                      href={f.rcpUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {f.label}
+                    <a href={r.rcpUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+                      {r.label}
                     </a>
-                    <div className="text-xs text-muted-foreground">CIS {f.cis}</div>
+                    <div className="text-xs text-muted-foreground">
+                      CIS {r.cis}
+                      {isIncomplet && side === "BOTH" && r.side && (
+                        <span className="ml-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">{r.side} inc.</span>
+                      )}
+                    </div>
                   </td>
+                  {showCat && (
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${catTone(r.catLabel)}`}>
+                        {r.catLabel}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-muted-foreground">
-                    {f.substances.join(" + ") || "—"}
+                    <span className="block max-w-[14rem] truncate" title={r.substances.join(" + ")}>
+                      {r.substances.join(" + ") || "—"}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
-                    <Code>{f.ruimAtc.join(", ") || "∅"}</Code>
-                    {f.ruimLibelle && (
-                      <div className="mt-0.5 text-xs text-muted-foreground">{f.ruimLibelle}</div>
+                    <AtcCodes codes={r.ruimAtc} />
+                    {r.ruimLibelle && <div className="mt-0.5 text-xs text-muted-foreground">{r.ruimLibelle}</div>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <AtcCodes codes={r.rcpAtc} />
+                    {r.rcpLibelle && <div className="mt-0.5 text-xs text-muted-foreground">{r.rcpLibelle}</div>}
+                    {r.ctx && (
+                      <div className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground" title={r.ctx}>
+                        « {r.ctx} »
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <Code>{f.rcpAtc.join(", ") || "∅"}</Code>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>
-                      {vb.text}
-                    </span>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>{vb.text}</span>
                   </td>
                 </tr>
               );
             })}
-            {filtered.length === 0 && (
+            {shown.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={showCat ? 6 : 5} className="px-3 py-8 text-center text-muted-foreground">
                   Aucune spécialité pour ce filtre.
                 </td>
               </tr>
@@ -258,66 +457,69 @@ export default function AuditReport({ data }: { data: AuditData }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {filtered.length} spécialité{filtered.length > 1 ? "s" : ""} affichée{filtered.length > 1 ? "s" : ""}
-        {" · "}clic sur le nom → RCP de la BDPM
-      </p>
 
-      {/* Annexe : RCP_INCOMPLET (motif texte libre) */}
-      <details className="mt-10 rounded-lg border border-border">
-        <summary className="cursor-pointer list-none px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">
-          <span className="mr-2 text-muted-foreground">▸</span>
-          RCP incomplet — {data.rcpIncompletTotal.toLocaleString("fr-FR")} spécialités où le RCP ne
-          donne pas de code ATC de niveau 5 (échantillon)
-        </summary>
-        <div className="border-t border-border px-4 py-3">
-          <p className="mb-3 text-sm text-muted-foreground">
-            Le RCP ne cite qu&rsquo;un libellé de classe, un code partiel (<Code>N02B</Code>) ou
-            un code mal formé (<Code>M0AE01</Code>). Contexte brut capté après « code ATC : ».
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px] text-sm">
-              <tbody>
-                {data.rcpIncompletSample.map((s) => (
-                  <tr key={s.cis} className="border-t border-border align-top">
-                    <td className="px-2 py-1.5">
-                      <a href={s.rcpUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                        {s.label}
-                      </a>
-                    </td>
-                    <td className="px-2 py-1.5"><Code>{s.ruimAtc.join(", ")}</Code></td>
-                    <td className="px-2 py-1.5 text-muted-foreground">« {s.ctx} »</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* Pagination */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          {total === 0
+            ? "0 résultat"
+            : `${(cur * PER_PAGE + 1).toLocaleString("fr-FR")}–${Math.min((cur + 1) * PER_PAGE, total).toLocaleString("fr-FR")} sur ${total.toLocaleString("fr-FR")}`}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={cur === 0}
+            className="rounded-md border border-border px-2.5 py-1 hover:bg-accent disabled:opacity-40"
+          >
+            ← Précédent
+          </button>
+          <span>Page {cur + 1} / {pageCount}</span>
+          <button
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={cur >= pageCount - 1}
+            className="rounded-md border border-border px-2.5 py-1 hover:bg-accent disabled:opacity-40"
+          >
+            Suivant →
+          </button>
         </div>
-      </details>
-
-      <footer className="mt-10 border-t border-border pt-4 text-xs text-muted-foreground">
-        Méthode : moteur <Code>src/lib/auditAtc.ts</Code> · API <Code>/api/audit</Code> ·
-        script <Code>scripts/audit-atc.ts</Code>. Verdict 100 % déterministe (regex +
-        comparaison de chaînes normalisées, sels retirés), sans LLM.
-      </footer>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        clic sur le nom → RCP · clic sur un code → registre WHO ATC/DDD
+      </p>
     </div>
   );
 }
 
-const StatCard = ({
+const Letter = ({ children }: { children: React.ReactNode }) => (
+  <span className="text-xs font-semibold text-muted-foreground">{children}</span>
+);
+
+const BigStat = ({
+  letter,
   label,
   value,
-  sub,
   tone,
 }: {
+  letter: string;
   label: string;
   value: number;
-  sub: string;
   tone: string;
 }) => (
   <div className="rounded-lg border border-border p-4">
-    <div className={`text-2xl font-bold ${tone}`}>{value.toLocaleString("fr-FR")}</div>
-    <div className="text-sm font-medium">{label}</div>
-    <div className="text-xs text-muted-foreground">{sub}</div>
+    <div className="flex items-baseline gap-2">
+      <Letter>{letter}</Letter>
+      <span className="text-sm font-medium">{label}</span>
+    </div>
+    <div className={`mt-1 text-2xl font-bold ${tone}`}>{value.toLocaleString("fr-FR")}</div>
+  </div>
+);
+
+const SubStat = ({ letter, label, value }: { letter: string; label: string; value: number }) => (
+  <div className="rounded-lg border border-border p-3">
+    <div className="flex items-baseline gap-2">
+      <Letter>{letter}</Letter>
+      <span className="text-sm">{label}</span>
+    </div>
+    <div className="mt-0.5 text-xl font-semibold">{value.toLocaleString("fr-FR")}</div>
   </div>
 );
