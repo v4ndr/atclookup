@@ -48,6 +48,53 @@ via l'en-tête `x-admin-token` ou le paramètre `?token=` (l'IHM propose un cham
 dédié, conservé dans le navigateur). Si `ADMIN_TOKEN` n'est pas définie, l'accès
 est ouvert (pratique en dev) — **pensez à la définir en production**.
 
+## Audit ATC — RCP (BDPM) vs RUIM (SMT)
+
+Le code ATC d'une spécialité existe à **deux** endroits, qui peuvent diverger :
+
+- **structuré** dans le RUIM (Référentiel Unique d'Interopérabilité du
+  Médicament, publié par l'ANS sur le SMT) via `ansm:codeATC` — c'est la source
+  qu'interroge ATC Lookup ;
+- en **texte libre** dans le RCP publié par la BDPM (rubrique « Classe
+  pharmacothérapeutique – code ATC »), qui reflète l'AMM.
+
+L'outil d'audit confronte les deux, spécialité par spécialité, et classe chaque
+cas en cinq catégories :
+
+| Catégorie | Signification |
+|---|---|
+| `GREEN` | RUIM et RCP présents et **concordants** |
+| `INCOHERENCE` | les deux présents mais **différents** — un `verdict` (`RCP`/`RUIM`/`AMBIGU`/`INDETERMINE`) désigne qui a raison, tranché en confrontant le **libellé OMS** du code à la substance active |
+| `RCP_INCOMPLET` | le RUIM a un code, mais le RCP n'expose **aucun code de niveau 5 exploitable** (classe seule, code partiel `N02B`, typo `M0AE01`, ou RCP absent) ; le `detail` cite le texte ATC brut trouvé |
+| `RUIM_INCOMPLET` | le RCP a un code, mais le RUIM **n'en a pas** (mode `without-atc`) |
+| `VIDE` | aucun code exploitable des deux côtés |
+
+Le verdict et la catégorisation sont **entièrement déterministes** (regex +
+comparaison de chaînes normalisées, sels retirés) : aucun LLM, coût quasi nul.
+Le débit vient d'un **pool de parallélisme borné** sur les téléchargements de RCP
+et de l'**abandon anticipé** du téléchargement dès qu'un code ATC est capté.
+
+### Script batch (base entière)
+
+```bash
+node scripts/audit-atc.ts            # ou : npm run audit:atc
+```
+
+Node ≥ 22 exécute le TypeScript directement (ni build, ni `tsx`). Options
+principales : `--mode=with-atc|without-atc|both`, `--concurrency=N` (défaut 24),
+`--page=N`, `--max=N` (test), `--only=INCOHERENCE,RCP_INCOMPLET`, `--resume`
+(reprise sur checkpoint). Sorties : un NDJSON (une ligne par spécialité), un
+`.summary.json` (récap par catégorie/verdict), et un `.checkpoint` pour la
+reprise. Le moteur (`src/lib/auditAtc.ts`) est autonome et partagé avec l'API.
+
+### API `/api/audit`
+
+- `GET /api/audit?atc=CODE` — audit ciblé d'un code ATC (toutes ses spécialités
+  RUIM), réponse JSON agrégée avec le verdict sur chaque incohérence.
+- `GET /api/audit?all=1&offset=0&limit=500[&mode=]` — audit d'une page de la base
+  entière, streamé en **NDJSON** (ligne `meta`, une ligne par spécialité, ligne
+  `summary`). `concurrency` borne le parallélisme. Même protection `ADMIN_TOKEN`.
+
 ## Open source
 
 Développé par [Romain Vandepitterie](https://fr.linkedin.com/in/romain-vandepitterie-9b4a08152), **ATC Lookup** est un projet **open source sous licence MIT**.

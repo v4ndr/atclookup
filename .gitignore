@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# audit ATC (rapports générés par scripts/audit-atc.ts)
+atc-audit*.ndjson
+atc-audit*.ndjson.summary.json
+atc-audit*.ndjson.checkpoint
+*.ndjson.checkpoint
