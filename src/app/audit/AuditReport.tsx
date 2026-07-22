@@ -153,6 +153,17 @@ const verdictBadge = (v: Finding["verdict"]) => {
   return { text: "N/A", cls: "bg-muted text-muted-foreground" };
 };
 
+// Cellule responsive : libellé + valeur empilés en mobile, valeur seule (grille)
+// en desktop.
+const Cell = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="min-w-0">
+    <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground md:hidden">
+      {label}
+    </span>
+    <div className="min-w-0">{children}</div>
+  </div>
+);
+
 const AtcCodes = ({ codes }: { codes: string[] }) =>
   codes.length ? (
     <span className="inline-flex flex-wrap gap-1">
@@ -277,6 +288,10 @@ export default function AuditReport({ data }: { data: AuditData }) {
   const shown = filtered.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
 
   const showCat = active === "TOUT";
+  // Colonnes desktop (littéraux complets pour le JIT Tailwind) ; mobile = 1 colonne.
+  const gridMd = showCat
+    ? "md:grid-cols-[1.8fr_0.9fr_1.1fr_1.1fr_1.3fr_max-content]"
+    : "md:grid-cols-[1.8fr_1.1fr_1.1fr_1.3fr_max-content]";
   const activeMeta =
     active === "TOUT"
       ? { desc: "Toutes les spécialités présentant un écart (incohérence, code incomplet ou absent)." }
@@ -393,75 +408,75 @@ export default function AuditReport({ data }: { data: AuditData }) {
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[820px] text-sm">
-          <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2 font-medium">Spécialité</th>
-              {showCat && <th className="px-3 py-2 font-medium">Catégorie</th>}
-              <th className="px-3 py-2 font-medium">Substance</th>
-              <th className="px-3 py-2 font-medium">RUIM</th>
-              <th className="px-3 py-2 font-medium">RCP</th>
-              <th className="px-3 py-2 font-medium">Verdict</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => {
-              const vb = verdictBadge(r.verdict);
-              return (
-                <tr key={r.cis} className="border-t border-border align-top hover:bg-accent/40">
-                  <td className="px-3 py-2">
-                    <a href={r.rcpUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
-                      {r.label}
-                    </a>
-                    <div className="text-xs text-muted-foreground">
-                      CIS {r.cis}
-                      {isIncomplet && side === "BOTH" && r.side && (
-                        <span className="ml-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">{r.side} inc.</span>
-                      )}
-                    </div>
-                  </td>
-                  {showCat && (
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${catTone(r.catLabel)}`}>
-                        {r.catLabel}
-                      </span>
-                    </td>
+      {/* Liste responsive : cartes empilées en mobile, grille type table en desktop */}
+      <div className="space-y-3 text-sm md:space-y-0 md:overflow-hidden md:rounded-lg md:border md:border-border">
+        {/* En-tête (desktop uniquement) */}
+        <div
+          className={`hidden bg-muted/50 px-3 py-2 text-xs uppercase text-muted-foreground md:grid md:gap-3 ${gridMd}`}
+        >
+          <span>Spécialité</span>
+          {showCat && <span>Catégorie</span>}
+          <span>Substance</span>
+          <span>RUIM</span>
+          <span>RCP</span>
+          <span>Verdict</span>
+        </div>
+
+        {shown.map((r) => {
+          const vb = verdictBadge(r.verdict);
+          return (
+            <div
+              key={r.cis}
+              className={`grid grid-cols-1 gap-2 rounded-lg border border-border p-3 md:items-start md:gap-3 md:rounded-none md:border-0 md:border-t md:p-3 md:hover:bg-accent/40 ${gridMd}`}
+            >
+              <div className="min-w-0">
+                <a href={r.rcpUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+                  {r.label}
+                </a>
+                <div className="text-xs text-muted-foreground">
+                  CIS {r.cis}
+                  {isIncomplet && side === "BOTH" && r.side && (
+                    <span className="ml-1 rounded bg-muted px-1 py-0.5 text-[10px] uppercase">{r.side} inc.</span>
                   )}
-                  <td className="px-3 py-2 text-muted-foreground">
-                    <span className="block max-w-[14rem] truncate" title={r.substances.join(" + ")}>
-                      {r.substances.join(" + ") || "—"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <AtcCodes codes={r.ruimAtc} />
-                    {r.ruimLibelle && <div className="mt-0.5 text-xs text-muted-foreground">{r.ruimLibelle}</div>}
-                  </td>
-                  <td className="px-3 py-2">
-                    <AtcCodes codes={r.rcpAtc} />
-                    {r.rcpLibelle && <div className="mt-0.5 text-xs text-muted-foreground">{r.rcpLibelle}</div>}
-                    {r.ctx && (
-                      <div className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground" title={r.ctx}>
-                        « {r.ctx} »
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>{vb.text}</span>
-                  </td>
-                </tr>
-              );
-            })}
-            {shown.length === 0 && (
-              <tr>
-                <td colSpan={showCat ? 6 : 5} className="px-3 py-8 text-center text-muted-foreground">
-                  Aucune spécialité pour ce filtre.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                </div>
+              </div>
+              {showCat && (
+                <Cell label="Catégorie">
+                  <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${catTone(r.catLabel)}`}>
+                    {r.catLabel}
+                  </span>
+                </Cell>
+              )}
+              <Cell label="Substance">
+                <span className="block text-muted-foreground md:max-w-[14rem] md:truncate" title={r.substances.join(" + ")}>
+                  {r.substances.join(" + ") || "—"}
+                </span>
+              </Cell>
+              <Cell label="RUIM">
+                <AtcCodes codes={r.ruimAtc} />
+                {r.ruimLibelle && <div className="mt-0.5 text-xs text-muted-foreground">{r.ruimLibelle}</div>}
+              </Cell>
+              <Cell label="RCP">
+                <AtcCodes codes={r.rcpAtc} />
+                {r.rcpLibelle && <div className="mt-0.5 text-xs text-muted-foreground">{r.rcpLibelle}</div>}
+                {r.ctx && (
+                  <div className="mt-0.5 text-xs text-muted-foreground md:max-w-[16rem] md:truncate" title={r.ctx}>
+                    « {r.ctx} »
+                  </div>
+                )}
+              </Cell>
+              <Cell label="Verdict">
+                <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>{vb.text}</span>
+              </Cell>
+            </div>
+          );
+        })}
+
+        {shown.length === 0 && (
+          <div className="rounded-lg border border-border p-8 text-center text-muted-foreground md:rounded-none md:border-0 md:border-t">
+            Aucune spécialité pour ce filtre.
+          </div>
+        )}
       </div>
 
       {/* Pagination */}
