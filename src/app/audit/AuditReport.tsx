@@ -197,10 +197,11 @@ export default function AuditReport({ data }: { data: AuditData }) {
 
   const cat = data.summary.categories;
   const bk = data.summary.buckets;
-  const totalInc = data.findings.length;
   const cErreurs = (bk.RUIM_ERREUR ?? 0) + (bk.RCP_ERREUR ?? 0);
   const dAmbiguites = (bk.AMBIGU ?? 0) + (bk.INDETERMINE ?? 0) + (bk.MULTI ?? 0);
-  const eIncomplets = bk.GRANULARITE ?? 0;
+  // « Codes incomplets » = code RUIM trop large (GRANULARITE) + RCP sans code niveau 5.
+  const eIncomplets = (bk.GRANULARITE ?? 0) + data.rcpIncomplets.length;
+  const bIncoherences = cErreurs + dAmbiguites + eIncomplets;
   const isIncomplet = active === "GRANULARITE";
 
   // Toutes les lignes « incohérence » avec leur libellé de catégorie.
@@ -346,7 +347,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
       <div className="mb-8 space-y-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <BigStat label="Concordances" value={cat.GREEN ?? 0} tone="text-emerald-600 dark:text-emerald-400" />
-          <BigStat label="Incohérences" value={totalInc} tone="text-destructive" />
+          <BigStat label="Incohérences" value={bIncoherences} tone="text-destructive" />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SubStat label="Erreurs" value={cErreurs} />
@@ -355,7 +356,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
         </div>
       </div>
 
-      <h2 className="mb-4 text-lg font-semibold">Détail des {totalInc} incohérences</h2>
+      <h2 className="mb-4 text-lg font-semibold">Détail des {bIncoherences.toLocaleString("fr-FR")} incohérences</h2>
 
       {/* Onglets */}
       <div className="mb-4 flex flex-wrap gap-2">
