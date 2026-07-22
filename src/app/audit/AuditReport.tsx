@@ -74,7 +74,7 @@ const BUCKETS: {
   },
   {
     key: "RCP_ERREUR",
-    label: "Erreur / typo RCP",
+    label: "Erreur RCP",
     desc: "Le code du RCP est erroné ou mal saisi ; le RUIM est cohérent avec la substance.",
     tone: "bg-amber-500 text-white dark:bg-amber-600",
   },
