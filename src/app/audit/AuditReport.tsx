@@ -38,6 +38,18 @@ type RcpIncomplet = {
   rcpUrl: string;
 };
 
+// Spécialité active dont le RUIM ne porte AUCUN code ATC (le RCP peut l'avoir).
+type RuimSansAtc = {
+  cis: string;
+  label: string;
+  substances: string[];
+  rcpAtc: string[];
+  rcpLibelle: string | null;
+  ctx: string | null;
+  rcpAvailable: boolean;
+  rcpUrl: string;
+};
+
 export type AuditData = {
   generatedAt: string;
   base: number;
@@ -48,6 +60,7 @@ export type AuditData = {
   };
   findings: Finding[];
   rcpIncomplets: RcpIncomplet[];
+  ruimSansAtc: RuimSansAtc[];
 };
 
 // Ligne unifiée pour l'affichage.
@@ -125,10 +138,12 @@ const BUCKETS: { key: Bucket; label: string; desc: string; tone: string }[] = [
 const bucketLabel = Object.fromEntries(BUCKETS.map((b) => [b.key, b.label])) as Record<Bucket, string>;
 
 const RCP_INCOMPLET_LABEL = "RCP incomplet";
+const RUIM_SANS_ATC_LABEL = "RUIM sans ATC";
 const catTone = (label: string): string => {
   const b = BUCKETS.find((x) => x.label === label);
   if (b) return b.tone;
   if (label === RCP_INCOMPLET_LABEL) return "bg-amber-500/80 text-white dark:bg-amber-600";
+  if (label === RUIM_SANS_ATC_LABEL) return "bg-destructive/80 text-white";
   return "bg-muted text-muted-foreground";
 };
 
@@ -183,9 +198,32 @@ export default function AuditReport({ data }: { data: AuditData }) {
     () => data.findings.map((f) => ({ ...f, ctx: null, catLabel: bucketLabel[f.bucket], bucket: f.bucket })),
     [data.findings],
   );
-  const ruimIncompletRows = useMemo(
-    () => findingRows.filter((r) => r.bucket === "GRANULARITE"),
+  // Côté « RUIM incomplet » = code trop large (GRANULARITE) + code absent (ruimSansAtc).
+  const granulariteRows = useMemo(
+    () => findingRows.filter((r) => r.bucket === "GRANULARITE").map((r) => ({ ...r, side: "RUIM" as const })),
     [findingRows],
+  );
+  const ruimSansAtcRows: Row[] = useMemo(
+    () =>
+      data.ruimSansAtc.map((r) => ({
+        cis: r.cis,
+        label: r.label,
+        substances: r.substances,
+        ruimAtc: [],
+        ruimLibelle: null,
+        rcpAtc: r.rcpAtc,
+        rcpLibelle: r.rcpLibelle,
+        ctx: r.ctx,
+        verdict: null,
+        rcpUrl: r.rcpUrl,
+        catLabel: RUIM_SANS_ATC_LABEL,
+        side: "RUIM" as const,
+      })),
+    [data.ruimSansAtc],
+  );
+  const ruimIncompletRows = useMemo(
+    () => [...granulariteRows, ...ruimSansAtcRows],
+    [granulariteRows, ruimSansAtcRows],
   );
   const rcpIncompletRows: Row[] = useMemo(
     () =>
@@ -207,14 +245,14 @@ export default function AuditReport({ data }: { data: AuditData }) {
   );
 
   const rows: Row[] = useMemo(() => {
-    if (active === "TOUT") return [...findingRows, ...rcpIncompletRows];
+    if (active === "TOUT") return [...findingRows, ...rcpIncompletRows, ...ruimSansAtcRows];
     if (active === "GRANULARITE") {
       if (side === "RUIM") return ruimIncompletRows;
       if (side === "RCP") return rcpIncompletRows;
       return [...ruimIncompletRows, ...rcpIncompletRows];
     }
     return findingRows.filter((r) => r.bucket === active);
-  }, [active, side, findingRows, ruimIncompletRows, rcpIncompletRows]);
+  }, [active, side, findingRows, ruimIncompletRows, rcpIncompletRows, ruimSansAtcRows]);
 
   const filtered = useMemo(() => {
     const q = norm(query.trim());
@@ -248,7 +286,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
       : BUCKETS.find((b) => b.key === active)!;
 
   const TABS: { key: Tab; label: string; n: number; tone: string }[] = [
-    { key: "TOUT", label: "Tout", n: findingRows.length + rcpIncompletRows.length, tone: "bg-foreground/10" },
+    { key: "TOUT", label: "Tout", n: findingRows.length + rcpIncompletRows.length + ruimSansAtcRows.length, tone: "bg-foreground/10" },
     ...BUCKETS.map((b) => ({ key: b.key, label: b.label, n: bk[b.key] ?? 0, tone: b.tone })),
   ];
 
