@@ -448,7 +448,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>{vb.text}</span>
+                    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>{vb.text}</span>
                   </td>
                 </tr>
               );
