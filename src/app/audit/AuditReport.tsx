@@ -21,6 +21,7 @@ type Finding = {
   ruimAtc: string[];
   ruimLibelle: string | null;
   rcpAtc: string[];
+  rcpLibelle: string | null;
   verdict: "RCP" | "RUIM" | "AMBIGU" | "INDETERMINE" | null;
   relation: "divergence" | "ruim_parent" | "rcp_parent" | "egal";
   bucket: Bucket;
@@ -45,6 +46,16 @@ export type AuditData = {
   }[];
   rcpIncompletTotal: number;
 };
+
+// ---------------------------------------------------------------------------
+// Normalisation insensible aux accents (filtre résilient)
+// ---------------------------------------------------------------------------
+const norm = (s: string): string =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// Lien vers le registre officiel WHO ATC/DDD.
+const atcRegistryUrl = (code: string) =>
+  `https://atcddd.fhi.no/atc_ddd_index/?code=${encodeURIComponent(code)}&showdescription=no`;
 
 // ---------------------------------------------------------------------------
 // Métadonnées de présentation des catégories (buckets)
@@ -81,26 +92,47 @@ const BUCKETS: {
   },
   {
     key: "GRANULARITE",
-    label: "Granularité",
-    desc: "Le code RUIM est un parent (moins précis) du code RCP, ou l'inverse. Ce n'est pas une erreur de classe.",
+    label: "Incomplet",
+    desc: "Le code RUIM est un parent (moins précis) du code RCP : RUIM incomplet, pas une erreur de classe.",
     tone: "bg-muted text-muted-foreground",
   },
   {
     key: "MULTI",
     label: "Multi-codes",
-    desc: "Les jeux de codes se recoupent partiellement (spécialités multi-codes / associations).",
+    desc: "",
     tone: "bg-muted text-muted-foreground",
   },
 ];
 
 const verdictBadge = (v: Finding["verdict"]) => {
-  if (v === "RCP") return { text: "RCP a raison", cls: "bg-destructive text-white" };
-  if (v === "RUIM") return { text: "RUIM a raison", cls: "bg-amber-500 text-white dark:bg-amber-600" };
+  if (v === "RCP") return { text: "RCP OK", cls: "bg-destructive text-white" };
+  if (v === "RUIM") return { text: "RUIM OK", cls: "bg-amber-500 text-white dark:bg-amber-600" };
   if (v === "AMBIGU") return { text: "ambigu", cls: "bg-secondary text-secondary-foreground" };
-  return { text: "indéterminé", cls: "bg-muted text-muted-foreground" };
+  return { text: "N/A", cls: "bg-muted text-muted-foreground" };
 };
 
-const Code = ({ children }: { children: React.ReactNode }) => (
+// Codes ATC cliquables → registre WHO ATC/DDD.
+const AtcCodes = ({ codes }: { codes: string[] }) =>
+  codes.length ? (
+    <span className="inline-flex flex-wrap gap-1">
+      {codes.map((c) => (
+        <a
+          key={c}
+          href={atcRegistryUrl(c)}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs hover:underline"
+          title="Voir dans le registre WHO ATC/DDD"
+        >
+          {c}
+        </a>
+      ))}
+    </span>
+  ) : (
+    <span className="font-mono text-xs text-muted-foreground">∅</span>
+  );
+
+const InlineCode = ({ children }: { children: React.ReactNode }) => (
   <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</code>
 );
 
@@ -115,18 +147,22 @@ export default function AuditReport({ data }: { data: AuditData }) {
   const totalInc = data.findings.length;
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = norm(query.trim());
     return data.findings.filter((f) => {
       if (f.bucket !== active) return false;
       if (!q) return true;
-      return (
-        f.label.toLowerCase().includes(q) ||
-        f.cis.includes(q) ||
-        f.substances.some((s) => s.toLowerCase().includes(q)) ||
-        f.ruimAtc.some((c) => c.toLowerCase().includes(q)) ||
-        f.rcpAtc.some((c) => c.toLowerCase().includes(q)) ||
-        (f.ruimLibelle ?? "").toLowerCase().includes(q)
+      const hay = norm(
+        [
+          f.label,
+          f.cis,
+          f.substances.join(" "),
+          f.ruimAtc.join(" "),
+          f.rcpAtc.join(" "),
+          f.ruimLibelle ?? "",
+          f.rcpLibelle ?? "",
+        ].join(" "),
       );
+      return hay.includes(q);
     });
   }, [data.findings, active, query]);
 
@@ -148,22 +184,29 @@ export default function AuditReport({ data }: { data: AuditData }) {
           Confrontation, spécialité par spécialité, du code ATC{" "}
           <strong className="text-foreground">structuré</strong> du RUIM (ANS)
           au code ATC en <strong className="text-foreground">texte libre</strong>{" "}
-          du RCP publié par la BDPM. Le verdict « qui a raison » est déterministe
-          (libellé OMS du code confronté à la substance active).
+          du RCP publié par la BDPM.
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Base auditée : <strong className="text-foreground">{data.base.toLocaleString("fr-FR")}</strong>{" "}
+          Base auditée :{" "}
+          <strong className="text-foreground">{data.base.toLocaleString("fr-FR")}</strong>{" "}
           spécialités actives · généré le {data.generatedAt}
         </p>
       </header>
 
       {/* Cartes récap */}
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Concordantes" value={cat.GREEN ?? 0} sub="RUIM = RCP" tone="text-emerald-600 dark:text-emerald-400" />
         <StatCard label="Incohérences" value={totalInc} sub="codes différents" tone="text-destructive" />
         <StatCard label="RCP incomplet" value={cat.RCP_INCOMPLET ?? 0} sub="pas de code niveau 5" tone="text-amber-600 dark:text-amber-400" />
-        <StatCard label="Erreurs RUIM" value={data.summary.buckets.RUIM_ERREUR} sub="à corriger à la source" tone="text-destructive" />
       </div>
+
+      {/* Section : détail des incohérences */}
+      <h2 className="mb-1 text-lg font-semibold">
+        Détail des {totalInc} incohérences
+      </h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Les spécialités dont le code RUIM et le code RCP diffèrent, réparties par nature.
+      </p>
 
       {/* Onglets par bucket */}
       <div className="mb-4 flex flex-wrap gap-2">
@@ -202,7 +245,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
 
       {/* Table */}
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-3 py-2 font-medium">Spécialité</th>
@@ -229,16 +272,24 @@ export default function AuditReport({ data }: { data: AuditData }) {
                     <div className="text-xs text-muted-foreground">CIS {f.cis}</div>
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
-                    {f.substances.join(" + ") || "—"}
+                    <span
+                      className="block max-w-[14rem] truncate"
+                      title={f.substances.join(" + ")}
+                    >
+                      {f.substances.join(" + ") || "—"}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
-                    <Code>{f.ruimAtc.join(", ") || "∅"}</Code>
+                    <AtcCodes codes={f.ruimAtc} />
                     {f.ruimLibelle && (
                       <div className="mt-0.5 text-xs text-muted-foreground">{f.ruimLibelle}</div>
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <Code>{f.rcpAtc.join(", ") || "∅"}</Code>
+                    <AtcCodes codes={f.rcpAtc} />
+                    {f.rcpLibelle && (
+                      <div className="mt-0.5 text-xs text-muted-foreground">{f.rcpLibelle}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${vb.cls}`}>
@@ -260,7 +311,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         {filtered.length} spécialité{filtered.length > 1 ? "s" : ""} affichée{filtered.length > 1 ? "s" : ""}
-        {" · "}clic sur le nom → RCP de la BDPM
+        {" · "}clic sur le nom → RCP · clic sur un code → registre WHO ATC/DDD
       </p>
 
       {/* Annexe : RCP_INCOMPLET (motif texte libre) */}
@@ -272,8 +323,8 @@ export default function AuditReport({ data }: { data: AuditData }) {
         </summary>
         <div className="border-t border-border px-4 py-3">
           <p className="mb-3 text-sm text-muted-foreground">
-            Le RCP ne cite qu&rsquo;un libellé de classe, un code partiel (<Code>N02B</Code>) ou
-            un code mal formé (<Code>M0AE01</Code>). Contexte brut capté après « code ATC : ».
+            Le RCP ne cite qu&rsquo;un libellé de classe, un code partiel (<InlineCode>N02B</InlineCode>) ou
+            un code mal formé (<InlineCode>M0AE01</InlineCode>). Contexte brut capté après « code ATC : ».
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
@@ -285,7 +336,9 @@ export default function AuditReport({ data }: { data: AuditData }) {
                         {s.label}
                       </a>
                     </td>
-                    <td className="px-2 py-1.5"><Code>{s.ruimAtc.join(", ")}</Code></td>
+                    <td className="px-2 py-1.5">
+                      <AtcCodes codes={s.ruimAtc} />
+                    </td>
                     <td className="px-2 py-1.5 text-muted-foreground">« {s.ctx} »</td>
                   </tr>
                 ))}
@@ -294,12 +347,6 @@ export default function AuditReport({ data }: { data: AuditData }) {
           </div>
         </div>
       </details>
-
-      <footer className="mt-10 border-t border-border pt-4 text-xs text-muted-foreground">
-        Méthode : moteur <Code>src/lib/auditAtc.ts</Code> · API <Code>/api/audit</Code> ·
-        script <Code>scripts/audit-atc.ts</Code>. Verdict 100 % déterministe (regex +
-        comparaison de chaînes normalisées, sels retirés), sans LLM.
-      </footer>
     </div>
   );
 }
