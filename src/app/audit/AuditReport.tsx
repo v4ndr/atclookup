@@ -330,13 +330,13 @@ export default function AuditReport({ data }: { data: AuditData }) {
       {/* Stats hiérarchiques : B = C + D + E */}
       <div className="mb-8 space-y-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <BigStat letter="A" label="Concordances" value={cat.GREEN ?? 0} tone="text-emerald-600 dark:text-emerald-400" />
-          <BigStat letter="B" label="Incohérences" value={totalInc} tone="text-destructive" />
+          <BigStat label="Concordances" value={cat.GREEN ?? 0} tone="text-emerald-600 dark:text-emerald-400" />
+          <BigStat label="Incohérences" value={totalInc} tone="text-destructive" />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <SubStat letter="C" label="Erreurs" value={cErreurs} />
-          <SubStat letter="D" label="Ambiguïtés" value={dAmbiguites} />
-          <SubStat letter="E" label="Codes incomplets" value={eIncomplets} />
+          <SubStat label="Erreurs" value={cErreurs} />
+          <SubStat label="Ambiguïtés" value={dAmbiguites} />
+          <SubStat label="Codes incomplets" value={eIncomplets} />
         </div>
       </div>
 
@@ -493,36 +493,24 @@ export default function AuditReport({ data }: { data: AuditData }) {
   );
 }
 
-const Letter = ({ children }: { children: React.ReactNode }) => (
-  <span className="text-xs font-semibold text-muted-foreground">{children}</span>
-);
-
 const BigStat = ({
-  letter,
   label,
   value,
   tone,
 }: {
-  letter: string;
   label: string;
   value: number;
   tone: string;
 }) => (
   <div className="rounded-lg border border-border p-4">
-    <div className="flex items-baseline gap-2">
-      <Letter>{letter}</Letter>
-      <span className="text-sm font-medium">{label}</span>
-    </div>
+    <span className="text-sm font-medium">{label}</span>
     <div className={`mt-1 text-2xl font-bold ${tone}`}>{value.toLocaleString("fr-FR")}</div>
   </div>
 );
 
-const SubStat = ({ letter, label, value }: { letter: string; label: string; value: number }) => (
+const SubStat = ({ label, value }: { label: string; value: number }) => (
   <div className="rounded-lg border border-border p-3">
-    <div className="flex items-baseline gap-2">
-      <Letter>{letter}</Letter>
-      <span className="text-sm">{label}</span>
-    </div>
+    <span className="text-sm">{label}</span>
     <div className="mt-0.5 text-xl font-semibold">{value.toLocaleString("fr-FR")}</div>
   </div>
 );
