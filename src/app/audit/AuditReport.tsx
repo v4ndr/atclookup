@@ -286,7 +286,13 @@ export default function AuditReport({ data }: { data: AuditData }) {
 
   const TABS: { key: Tab; label: string; n: number; tone: string }[] = [
     { key: "TOUT", label: "Tout", n: findingRows.length + rcpIncompletRows.length + ruimSansCodeRows.length, tone: "bg-foreground/10" },
-    ...BUCKETS.map((b) => ({ key: b.key, label: b.label, n: bk[b.key] ?? 0, tone: b.tone })),
+    ...BUCKETS.map((b) => ({
+      key: b.key,
+      label: b.label,
+      // « Codes incomplets » couvre RUIM-incomplet + RCP-incomplet (sous-filtres).
+      n: b.key === "GRANULARITE" ? ruimIncompletRows.length + rcpIncompletRows.length : (bk[b.key] ?? 0),
+      tone: b.tone,
+    })),
     { key: "SANS_CODE", label: "Pas de code ATC", n: ruimSansCodeRows.length, tone: "bg-muted text-muted-foreground" },
   ];
 
@@ -483,9 +489,6 @@ export default function AuditReport({ data }: { data: AuditData }) {
           </button>
         </div>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        clic sur le nom → RCP · clic sur un code → registre WHO ATC/DDD
-      </p>
     </div>
   );
 }
