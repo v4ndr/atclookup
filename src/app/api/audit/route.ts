@@ -19,8 +19,11 @@ const json = (body: unknown, status = 200) =>
   });
 
 // Un audit complet est long : on ne fige pas la réponse (pas de cache/SSG).
+// maxDuration plafonné à 60 s (limite du plan Vercel Hobby). Une page `all`
+// trop grande peut dépasser ce budget : réduire `limit` côté client si besoin
+// (l'audit batch complet passe par scripts/audit-atc.ts, hors serverless).
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 /**
  * API d'audit ATC — confronte le code ATC structuré du RUIM au code ATC en
