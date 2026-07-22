@@ -333,7 +333,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
           <BigStat letter="A" label="Concordances" value={cat.GREEN ?? 0} tone="text-emerald-600 dark:text-emerald-400" />
           <BigStat letter="B" label="Incohérences" value={totalInc} tone="text-destructive" />
         </div>
-        <div className="grid grid-cols-1 gap-3 border-l-2 border-border pl-3 sm:ml-6 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SubStat letter="C" label="Erreurs" value={cErreurs} />
           <SubStat letter="D" label="Ambiguïtés" value={dAmbiguites} />
           <SubStat letter="E" label="Codes incomplets" value={eIncomplets} />
