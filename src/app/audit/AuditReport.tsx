@@ -197,11 +197,14 @@ export default function AuditReport({ data }: { data: AuditData }) {
 
   const cat = data.summary.categories;
   const bk = data.summary.buckets;
+  // Incohérences = tout ce qui n'est pas « ATC présent ET RUIM = RCP » (tout sauf
+  // les concordances).
   const cErreurs = (bk.RUIM_ERREUR ?? 0) + (bk.RCP_ERREUR ?? 0);
   const dAmbiguites = (bk.AMBIGU ?? 0) + (bk.INDETERMINE ?? 0) + (bk.MULTI ?? 0);
   // « Codes incomplets » = code RUIM trop large (GRANULARITE) + RCP sans code niveau 5.
   const eIncomplets = (bk.GRANULARITE ?? 0) + data.rcpIncomplets.length;
-  const bIncoherences = cErreurs + dAmbiguites + eIncomplets;
+  const fPasDeCode = data.ruimSansCode.length;
+  const bIncoherences = cErreurs + dAmbiguites + eIncomplets + fPasDeCode;
   const isIncomplet = active === "GRANULARITE";
 
   // Toutes les lignes « incohérence » avec leur libellé de catégorie.
@@ -349,10 +352,11 @@ export default function AuditReport({ data }: { data: AuditData }) {
           <BigStat label="Concordances" value={cat.GREEN ?? 0} tone="text-emerald-600 dark:text-emerald-400" />
           <BigStat label="Incohérences" value={bIncoherences} tone="text-destructive" />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SubStat label="Erreurs" value={cErreurs} />
           <SubStat label="Ambiguïtés" value={dAmbiguites} />
           <SubStat label="Codes incomplets" value={eIncomplets} />
+          <SubStat label="Pas de code ATC" value={fPasDeCode} />
         </div>
       </div>
 
@@ -383,10 +387,17 @@ export default function AuditReport({ data }: { data: AuditData }) {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-2xl text-sm text-muted-foreground">{activeMeta.desc}</p>
         <input
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          autoCapitalize="none"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filtrer (nom, substance, code, CIS)…"
-          className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:w-72"
+          className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:w-72 sm:text-sm"
         />
       </div>
 
