@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
@@ -193,8 +193,6 @@ export default function AuditReport({ data }: { data: AuditData }) {
   const [side, setSide] = useState<IncompletSide>("RUIM");
   const [page, setPage] = useState(0);
 
-  useEffect(() => setPage(0), [active, side, query]);
-
   const cat = data.summary.categories;
   const bk = data.summary.buckets;
   // Incohérences = tout ce qui n'est pas « ATC présent ET RUIM = RCP » (tout sauf
@@ -369,7 +367,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
           return (
             <button
               key={t.key}
-              onClick={() => setActive(t.key)}
+              onClick={() => { setActive(t.key); setPage(0); }}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
                 on ? "border-foreground bg-foreground text-background" : "border-border hover:bg-accent"
               }`}
@@ -395,7 +393,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
           autoComplete="off"
           spellCheck={false}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setPage(0); }}
           placeholder="Filtrer (nom, substance, code, CIS)…"
           className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:w-72 sm:text-sm"
         />
@@ -408,7 +406,7 @@ export default function AuditReport({ data }: { data: AuditData }) {
           {SIDE_TABS.map((t) => (
             <button
               key={t.key}
-              onClick={() => setSide(t.key)}
+              onClick={() => { setSide(t.key); setPage(0); }}
               className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
                 side === t.key ? "border-foreground bg-foreground text-background" : "border-border hover:bg-accent"
               }`}
@@ -421,7 +419,10 @@ export default function AuditReport({ data }: { data: AuditData }) {
       )}
 
       {/* Liste responsive : cartes empilées en mobile, grille type table en desktop */}
-      <div className="space-y-3 text-sm md:space-y-0 md:overflow-hidden md:rounded-lg md:border md:border-border">
+      <div
+        key={`${active}|${side}`}
+        className="space-y-3 text-sm md:space-y-0 md:overflow-hidden md:rounded-lg md:border md:border-border"
+      >
         {/* En-tête (desktop uniquement) */}
         <div
           className={`hidden bg-muted/50 px-3 py-2 text-xs uppercase text-muted-foreground md:grid md:gap-3 ${gridMd}`}
