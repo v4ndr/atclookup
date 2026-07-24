@@ -121,6 +121,13 @@ Le comportement côté widget est installé automatiquement par
 `document.fonts.ready`, contenu dynamique via `ResizeObserver`). Aucune action
 n'est requise côté widget.
 
+**Dégradation gracieuse** : le widget ne force **pas** `overflow: hidden` sur
+son propre document. Un hôte qui n'intègre **pas** le handler ci-dessous garde
+donc le **scroll natif** de l'iframe (le contenu reste accessible), au lieu de
+se retrouver tronqué et non scrollable. La prévention de la double scrollbar est
+du ressort de l'hôte (`scrolling="no"` + `overflow: hidden` sur l'élément
+iframe) et ne s'applique que lorsqu'il redimensionne effectivement l'iframe.
+
 ### Côté page hôte
 
 ```html

@@ -9,6 +9,14 @@ import { useEffect } from "react";
  * Protocole : { type: "widget-resize", height: <int px> } émis vers
  * `window.parent`. Voir la spec « Auto-resize du widget iframe ».
  *
+ * Dégradation gracieuse : le widget ne force PAS `overflow: hidden` sur son
+ * propre document. Un hôte qui n'implémente pas le handler de resize garde
+ * ainsi le scroll natif de l'iframe (contenu accessible), au lieu de se
+ * retrouver avec un contenu tronqué et non scrollable. La prévention de la
+ * double scrollbar est du ressort de l'hôte (attribut `scrolling="no"` +
+ * `overflow: hidden` sur l'élément iframe), qui ne s'applique que lorsqu'il a
+ * effectivement opté pour le redimensionnement automatique.
+ *
  * Ce composant ne rend rien : il installe les observateurs côté widget.
  */
 export default function WidgetAutoResize() {
@@ -16,11 +24,8 @@ export default function WidgetAutoResize() {
     const html = document.documentElement;
     const body = document.body;
 
-    // CSS requis côté widget : évite les boucles de resize et la double
-    // scrollbar. On mémorise les valeurs précédentes pour les restaurer si le
-    // composant est démonté (navigation client hors des routes embed).
-    const prevHtmlOverflow = html.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
+    // On mémorise les valeurs précédentes pour les restaurer si le composant
+    // est démonté (navigation client hors des routes embed).
     const prevBodyMargin = body.style.margin;
     // Le layout racine applique `min-h-screen` (min-height: 100vh) au body.
     // Dans une iframe, 100vh vaut la hauteur courante de l'iframe : la hauteur
@@ -28,8 +33,6 @@ export default function WidgetAutoResize() {
     // jamais diminuer (ex. passage à une fiche RCP plus courte). On neutralise
     // donc min-height dans le contexte embed.
     const prevBodyMinHeight = body.style.minHeight;
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
     body.style.margin = "0";
     body.style.minHeight = "0";
 
@@ -56,8 +59,6 @@ export default function WidgetAutoResize() {
     return () => {
       observer.disconnect();
       window.removeEventListener("load", sendHeight);
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
       body.style.margin = prevBodyMargin;
       body.style.minHeight = prevBodyMinHeight;
     };
