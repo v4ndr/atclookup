@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "../globals.css";
+import WidgetAutoResize from "./WidgetAutoResize";
 
 export const metadata: Metadata = {
   title: "ATC Lookup",
@@ -13,6 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <div className="h-full w-full">
+      <WidgetAutoResize />
       <div className="font-[family-name:var(--font-geist-sans)] w-full h-full flex flex-1 flex-col gap-2 items-center justify-start">
         {children}
       </div>

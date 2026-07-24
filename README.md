@@ -97,6 +97,59 @@ reprise. Le moteur (`src/lib/auditAtc.ts`) est autonome et partagé avec l'API.
   `nextCursor` de la page précédente jusqu'à `done:true`. `concurrency` borne le
   parallélisme. Même protection `ADMIN_TOKEN`.
 
+## Intégrer le widget (iframe)
+
+Les pages `/embed` et `/embed/rcp` sont conçues pour être intégrées dans une
+page hôte via une `<iframe>`. Le widget **mesure sa propre hauteur** et la
+transmet à la page hôte via `postMessage` ; la page hôte ajuste la hauteur de
+l'iframe en conséquence. On garantit ainsi une hauteur cohérente sur tous les
+navigateurs, sans scrollbar interne ni contenu coupé.
+
+### Protocole de message
+
+Le widget émet vers `window.parent` :
+
+```json
+{ "type": "widget-resize", "height": 842 }
+```
+
+- `type` : constante `"widget-resize"` (permet de filtrer les autres messages) ;
+- `height` : hauteur du contenu en pixels (entier, `document.documentElement.scrollHeight`).
+
+Le comportement côté widget est installé automatiquement par
+`src/app/embed/WidgetAutoResize.tsx` (rendu initial via `load`, web fonts via
+`document.fonts.ready`, contenu dynamique via `ResizeObserver`). Aucune action
+n'est requise côté widget.
+
+### Côté page hôte
+
+```html
+<iframe
+  id="widget-iframe"
+  src="https://WIDGET_ORIGIN/embed?atc=CODE"
+  style="width: 100%; border: 0; overflow: hidden;"
+  scrolling="no"
+  title="ATC Lookup"
+></iframe>
+<script>
+  (function () {
+    var WIDGET_ORIGIN = "https://WIDGET_ORIGIN"; // ⚠️ origine réelle du widget
+    window.addEventListener("message", function (e) {
+      if (e.origin !== WIDGET_ORIGIN) return; // sécurité : origine stricte
+      if (!e.data || e.data.type !== "widget-resize") return;
+      var h = parseInt(e.data.height, 10);
+      if (!Number.isFinite(h) || h <= 0 || h > 10000) return; // garde-fou
+      document.getElementById("widget-iframe").style.height = h + "px";
+    });
+  })();
+</script>
+```
+
+**Sécurité** : la page hôte doit toujours vérifier `e.origin` contre l'origine
+exacte du widget (jamais `'*'` en réception) et valider `height` (nombre fini,
+borné) avant de l'appliquer. Le message émis par le widget ne contient aucune
+donnée sensible.
+
 ## Open source
 
 Développé par [Romain Vandepitterie](https://fr.linkedin.com/in/romain-vandepitterie-9b4a08152), **ATC Lookup** est un projet **open source sous licence MIT**.
